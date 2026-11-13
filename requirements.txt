@@ -1,0 +1,11 @@
+fastapi
+uvicorn[standard]
+python-multipart
+python-dotenv
+pymongo
+pypdf
+pillow
+voyageai
+agent-engine-sdk-memory
+openai
+httpx

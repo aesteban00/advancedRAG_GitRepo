@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Advanced RAG + Memoria</title>
+  <link rel="stylesheet" href="/static/style.css?v=12" />
+</head>
+<body>
+  <!-- Barra superior (estilo consola Atlas) -->
+  <header class="topbar">
+    <div class="brand"><span class="leaf"></span>Advanced RAG</div>
+    <div class="crumbs">
+      <span><small>PROYECTO</small>Chat sobre PDFs</span>
+    </div>
+  </header>
+
+  <div class="layout">
+    <!-- Menu lateral -->
+    <nav class="sidebar">
+      <div class="nav-title">PIPELINE</div>
+      <div class="nav-note">voyage-context-4<br />voyage-multimodal-3.5<br />$vectorSearch + $rerank<br />Agent Engine Memory</div>
+      <!-- LLM configurado (se actualiza desde el panel derecho) -->
+      <div class="nav-note llm-note" id="pipeline-llm"></div>
+
+      <!-- Historial de sesiones (hilos), como en ChatGPT -->
+      <div class="nav-title">USUARIO</div>
+      <div class="user-box"><input type="text" id="user-input" value="demo-user" /></div>
+
+      <div class="nav-title">SESIONES</div>
+      <button id="new-session" type="button" class="new-session">+ Nueva sesión</button>
+      <ul id="session-list" class="session-list"></ul>
+
+      <!-- Documentos subidos: publicos y privados del usuario -->
+      <div class="nav-title">DOCUMENTOS</div>
+      <div class="tabs">
+        <button type="button" class="tab active" data-tab="public">Públicos</button>
+        <button type="button" class="tab" data-tab="private">Mis privados</button>
+      </div>
+      <ul id="doc-list" class="doc-list"></ul>
+    </nav>
+
+    <main class="content">
+      <div class="main-col">
+      <h1>Chat sobre PDFs</h1>
+
+      <!-- Subida de PDF -->
+      <section class="card" id="documentos">
+        <h2>Subir documento</h2>
+        <form id="upload-form">
+          <input type="file" id="pdf-input" accept="application/pdf" required />
+          <!-- Boton: PDF publico (todos los usuarios) o privado (solo este usuario) -->
+          <button id="visibility-toggle" class="toggle" type="button" data-visibility="public">
+            Público
+          </button>
+          <button type="submit" class="btn primary">Indexar PDF</button>
+        </form>
+        <p id="upload-status" class="status"></p>
+      </section>
+
+      <!-- Chat -->
+      <section class="card" id="consulta">
+        <div class="chat-header">
+          <h2>Consulta</h2>
+          <!-- Boton para activar/desactivar la memoria de Agent Engine -->
+          <button id="memory-toggle" class="toggle" type="button" aria-pressed="true">
+            Memoria: ON
+          </button>
+        </div>
+        <div id="chat-box" class="chat-box"></div>
+        <form id="chat-form">
+          <input type="text" id="message-input" placeholder="Haz una pregunta sobre tus documentos..." required />
+          <button type="submit" class="btn primary">Enviar</button>
+        </form>
+      </section>
+      </div>
+
+      <!-- Panel derecho: flujo de la peticion en tiempo real -->
+      <aside class="flow" id="flow-panel">
+        <h2>Flujo de la petición</h2>
+        <ol id="flow-steps" class="flow-steps"></ol>
+        <div id="flow-summary" class="flow-summary"></div>
+        <p id="flow-empty" class="status">Haz una pregunta para ver por dónde pasa.</p>
+
+        <!-- Tokens consumidos contra el LLM en el turno mostrado arriba -->
+        <h3>Tokens LLM del turno</h3>
+        <div id="token-box" class="token-box"><span class="status">Sin datos.</span></div>
+
+        <!-- Ajustes del LLM: solo en memoria del servidor -->
+        <h3>LLM</h3>
+        <p class="warn">⚠ Estos valores no se almacenan en ningún sitio: solo viven en la
+          memoria del servidor y se pierden al parar la Demo.</p>
+        <form id="llm-form" class="llm-form">
+          <label>LLM_BASE_URL <input type="text" id="llm-base-url" placeholder="https://api.deepseek.com" /></label>
+          <label>LLM_API_KEY <input type="password" id="llm-api-key" placeholder="(sin cambios)" autocomplete="off" /></label>
+          <label>LLM_MODEL <input type="text" id="llm-model" placeholder="deepseek-v4-flash-0731" /></label>
+          <button type="submit" class="btn primary">Aplicar</button>
+          <span id="llm-status" class="status"></span>
+        </form>
+      </aside>
+    </main>
+  </div>
+
+  <script src="/static/app.js?v=12"></script>
+</body>
+</html>
