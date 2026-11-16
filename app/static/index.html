@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>GraphRAG · MongoDB Atlas</title>
-  <link rel="stylesheet" href="/static/style.css?v=21" />
+  <link rel="stylesheet" href="/static/style.css?v=22" />
 </head>
 <body>
   <!-- Barra superior (estilo consola Atlas) -->
@@ -15,6 +15,7 @@
     </div>
     <nav class="main-tabs">
       <button type="button" data-view="chat" class="active">Chat</button>
+      <button type="button" data-view="graph">Grafo</button>
       <button type="button" data-view="config">Configuración</button>
     </nav>
   </header>
@@ -82,6 +83,25 @@
           <p id="graph-info" class="status">Haz una pregunta para ver el subgrafo usado.</p>
         </section>
       </aside>
+      </section>
+
+      <!-- ============ Vista GRAFO (grande, con zoom) ============ -->
+      <section id="view-graph" class="view" hidden>
+        <div class="graph-full">
+          <div class="graph-toolbar">
+            <h1>Grafo de conocimiento</h1>
+            <button type="button" id="gv-overview" class="btn">Repos</button>
+            <button type="button" id="gv-last" class="btn">Último del chat</button>
+            <input type="text" id="gv-entity" placeholder="entidad (_id) + Enter" />
+            <button type="button" id="gv-out" class="btn">−</button>
+            <button type="button" id="gv-reset" class="btn">100%</button>
+            <button type="button" id="gv-in" class="btn">+</button>
+          </div>
+          <p class="status">Rueda del ratón = zoom · arrastrar el fondo = mover · clic en un nodo = expandir su vecindario.</p>
+          <svg id="gv-svg" viewBox="0 0 1000 700" preserveAspectRatio="xMidYMid meet"></svg>
+          <div id="gv-legend" class="graph-legend"></div>
+          <p id="gv-info" class="status"></p>
+        </div>
       </section>
 
       <!-- ============ Vista CONFIGURACION ============ -->
@@ -159,7 +179,7 @@
     </main>
   </div>
 
-  <script src="/static/graph.js?v=21"></script>
-  <script src="/static/app.js?v=21"></script>
+  <script src="/static/graph.js?v=22"></script>
+  <script src="/static/app.js?v=22"></script>
 </body>
 </html>

@@ -377,9 +377,11 @@ openThread(currentThread());
 function showView(name) {
   document.getElementById("view-chat").hidden = name !== "chat";
   document.getElementById("view-config").hidden = name !== "config";
+  document.getElementById("view-graph").hidden = name !== "graph";
   document.querySelectorAll(".main-tabs button").forEach((b) => b.classList.toggle("active", b.dataset.view === name));
   localStorage.setItem("view", name);
   if (name === "config") loadStatus();
+  if (name === "graph" && !document.getElementById("gv-svg").childElementCount) loadOverviewGraph("gv-svg");
 }
 document.querySelectorAll(".main-tabs button").forEach((b) => b.addEventListener("click", () => showView(b.dataset.view)));
 
@@ -512,7 +514,7 @@ async function runIngest(btn, url, opts) {
   try { const data = await apiJson(url, opts); log.replaceChildren(); logIngest(data); }
   catch (err) { log.replaceChildren(); logIngest({ results: [], errors: [{ file: "", error: err.message }] }); }
   document.querySelectorAll("#view-config button").forEach((b) => (b.disabled = false));
-  loadDocuments(); loadStatus(); loadOverviewGraph();
+  loadDocuments(); loadStatus(); loadOverviewGraph(); loadOverviewGraph("gv-svg");
 }
 $("ingest-files").addEventListener("click", () => {
   const fd = new FormData();
