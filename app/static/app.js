@@ -341,7 +341,7 @@ async function showFlow(flowId, bubble) {
     flow.steps.forEach(updateStep);
     showOrigin(flow.memory, flow.documents);
     showTokens(flow.tokens, flow.steps);
-    renderGraph(flow.graph);
+    showChatGraph(flow.graph);
   } catch (err) {
     resetFlow();
     document.getElementById("flow-summary").textContent = "Error: " + err.message;
@@ -356,7 +356,7 @@ function handleEvent(ev) {
     addMessage("assistant", ev.reply, ev.memory, ev.documents);
     showOrigin(ev.memory, ev.documents);
     showTokens(ev.tokens, Object.values(stepsSeen));
-    renderGraph(ev.graph);
+    showChatGraph(ev.graph);
     if (ev.flow_id && userBubble) {
       attachFlow(userBubble, ev.flow_id);
       userBubble.classList.add("selected");
@@ -381,7 +381,7 @@ function showView(name) {
   document.querySelectorAll(".main-tabs button").forEach((b) => b.classList.toggle("active", b.dataset.view === name));
   localStorage.setItem("view", name);
   if (name === "config") loadStatus();
-  if (name === "graph" && !document.getElementById("gv-svg").childElementCount) loadOverviewGraph("gv-svg");
+  if (name === "graph" && !document.getElementById("gv-svg").childElementCount) loadOverviewGraph();
 }
 document.querySelectorAll(".main-tabs button").forEach((b) => b.addEventListener("click", () => showView(b.dataset.view)));
 
@@ -514,7 +514,7 @@ async function runIngest(btn, url, opts) {
   try { const data = await apiJson(url, opts); log.replaceChildren(); logIngest(data); }
   catch (err) { log.replaceChildren(); logIngest({ results: [], errors: [{ file: "", error: err.message }] }); }
   document.querySelectorAll("#view-config button").forEach((b) => (b.disabled = false));
-  loadDocuments(); loadStatus(); loadOverviewGraph(); loadOverviewGraph("gv-svg");
+  loadDocuments(); loadStatus(); loadOverviewGraph();
 }
 $("ingest-files").addEventListener("click", () => {
   const fd = new FormData();

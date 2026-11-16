@@ -38,12 +38,11 @@ function enableZoomPan(id) {
 let lastGraph = null;  // ultimo subgrafo del chat (para la pestana Grafo)
 
 // Dibuja g = {nodes, edges}. ids: svg + info + leyenda (panel pequeno o pestana grande).
-function renderGraph(g, svgId = "graph-svg", infoId = "graph-info", legendId = "graph-legend") {
+function renderGraph(g, svgId = "gv-svg", infoId = "gv-info", legendId = "gv-legend") {
   const svg = document.getElementById(svgId);
   const info = document.getElementById(infoId);
   const legend = document.getElementById(legendId);
   svg.replaceChildren(); legend.replaceChildren();
-  if (svgId === "graph-svg") lastGraph = g;
   const defs = svgEl("defs");
   const marker = svgEl("marker", { id: "arrow-" + svgId, viewBox: "0 0 10 10", refX: 18, refY: 5, markerWidth: 6, markerHeight: 6, orient: "auto" });
   marker.appendChild(svgEl("path", { d: "M0,0 L10,5 L0,10 z", fill: "#889397" }));
@@ -53,7 +52,7 @@ function renderGraph(g, svgId = "graph-svg", infoId = "graph-info", legendId = "
   if (!views[svgId]) enableZoomPan(svgId);
   views[svgId].viewport = vp; applyView(svgId);
   if (!g || !g.nodes || !g.nodes.length) { info.textContent = "Sin entidades del grafo."; return; }
-  const big = svgId !== "graph-svg";
+  const big = true;
   const pos = {};
   g.nodes.forEach((n) => { pos[n.id] = [40 + n.x * 920, 40 + n.y * 620]; });
   for (const e of g.edges) {
@@ -86,31 +85,36 @@ function renderGraph(g, svgId = "graph-svg", infoId = "graph-info", legendId = "
   info.textContent = `${g.nodes.length} nodos · ${g.edges.length} relaciones · layout NetworkX · clic en un nodo para expandir`;
 }
 
-const _ids = (svgId) => svgId === "graph-svg" ? ["graph-svg", "graph-info", "graph-legend"] : [svgId, "gv-info", "gv-legend"];
-async function _loadGraph(url, svgId) {
-  const ids = _ids(svgId);
+async function _loadGraph(url) {
   try {
     const res = await fetch(url);
     const data = await res.json();
     if (!res.ok) throw new Error(data.detail || res.statusText);
-    resetView(svgId); renderGraph(data, ...ids);
-  } catch (err) { document.getElementById(ids[1]).textContent = "Error: " + err.message; }
+    resetView("gv-svg"); renderGraph(data);
+  } catch (err) { document.getElementById("gv-info").textContent = "Error: " + err.message; }
 }
-const loadOverviewGraph = (svgId = "graph-svg") => _loadGraph("/graph?type=Repository", svgId);
-const loadEntityGraph = (id, svgId = "graph-svg") => _loadGraph("/graph?depth=2&entity=" + encodeURIComponent(id), svgId);
+const loadOverviewGraph = () => _loadGraph("/graph?type=Repository");
+const loadEntityGraph = (id) => _loadGraph("/graph?depth=2&entity=" + encodeURIComponent(id));
 
-document.getElementById("graph-overview").addEventListener("click", () => loadOverviewGraph());
-document.getElementById("graph-entity").addEventListener("keydown", (e) => {
-  if (e.key === "Enter" && e.target.value.trim()) loadEntityGraph(e.target.value.trim());
+// Subgrafo de la respuesta del chat: se guarda para la pestana Grafo y se enlaza desde el flujo.
+function showChatGraph(g) {
+  lastGraph = g;
+  const link = document.getElementById("flow-graph-link");
+  if (g && g.nodes && g.nodes.length) {
+    link.textContent = `Ver grafo de esta respuesta (${g.nodes.length} nodos) →`;
+    link.hidden = false;
+  } else { link.hidden = true; }
+}
+document.getElementById("flow-graph-link").addEventListener("click", () => {
+  showView("graph"); resetView("gv-svg"); renderGraph(lastGraph);
 });
-// Pestana Grafo (grande)
-document.getElementById("gv-overview").addEventListener("click", () => loadOverviewGraph("gv-svg"));
-document.getElementById("gv-last").addEventListener("click", () => { resetView("gv-svg"); renderGraph(lastGraph, "gv-svg", "gv-info", "gv-legend"); });
+
+document.getElementById("gv-overview").addEventListener("click", loadOverviewGraph);
+document.getElementById("gv-last").addEventListener("click", () => { resetView("gv-svg"); renderGraph(lastGraph); });
 document.getElementById("gv-entity").addEventListener("keydown", (e) => {
-  if (e.key === "Enter" && e.target.value.trim()) loadEntityGraph(e.target.value.trim(), "gv-svg");
+  if (e.key === "Enter" && e.target.value.trim()) loadEntityGraph(e.target.value.trim());
 });
 document.getElementById("gv-in").addEventListener("click", () => zoomGraph("gv-svg", 1.3));
 document.getElementById("gv-out").addEventListener("click", () => zoomGraph("gv-svg", 1 / 1.3));
 document.getElementById("gv-reset").addEventListener("click", () => resetView("gv-svg"));
-enableZoomPan("graph-svg");
-loadOverviewGraph();
+enableZoomPan("gv-svg");

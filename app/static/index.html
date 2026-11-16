@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>GraphRAG · MongoDB Atlas</title>
-  <link rel="stylesheet" href="/static/style.css?v=22" />
+  <link rel="stylesheet" href="/static/style.css?v=23" />
 </head>
 <body>
   <!-- Barra superior (estilo consola Atlas) -->
@@ -69,19 +69,10 @@
           <ol id="flow-steps" class="flow-steps"></ol>
           <div id="flow-summary" class="flow-summary"></div>
           <p id="flow-empty" class="status">Haz una pregunta para ver por dónde pasa.</p>
+          <button type="button" id="flow-graph-link" class="btn" hidden></button>
           <h3>Tokens LLM del turno</h3>
           <div id="token-box" class="token-box"><span class="status">Sin datos.</span></div>
         </div>
-        <section class="graph-panel">
-          <div class="graph-head">
-            <h3>Grafo</h3>
-            <button type="button" id="graph-overview" class="btn">Repos</button>
-            <input type="text" id="graph-entity" placeholder="entidad (_id)…" />
-          </div>
-          <svg id="graph-svg" viewBox="0 0 1000 700" preserveAspectRatio="xMidYMid meet"></svg>
-          <div id="graph-legend" class="graph-legend"></div>
-          <p id="graph-info" class="status">Haz una pregunta para ver el subgrafo usado.</p>
-        </section>
       </aside>
       </section>
 
@@ -179,7 +170,7 @@
     </main>
   </div>
 
-  <script src="/static/graph.js?v=22"></script>
-  <script src="/static/app.js?v=22"></script>
+  <script src="/static/graph.js?v=23"></script>
+  <script src="/static/app.js?v=23"></script>
 </body>
 </html>
