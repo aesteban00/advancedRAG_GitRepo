@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import Body, FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -23,22 +23,35 @@ import json
 import traceback
 
 import chat
-import embeddings
+import config
 import flow_store
+import github_ingest
+import graph_store
+import graph_view
+import ingest
+import loaders
 import memory
-import pdf_processor
+import settings
 import setup_indexes
 import vector_search
+
+
+def _http_error(exc: Exception) -> HTTPException:
+    """ValueError -> 400 (entrada invalida); el resto -> 500."""
+    return HTTPException(400 if isinstance(exc, ValueError) else 500, str(exc))
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Al arrancar, aseguramos que existan los indices de Atlas Vector Search.
-    setup_indexes.ensure_indexes()
+    try:
+        setup_indexes.ensure_indexes()
+    except Exception as exc:  # la app debe arrancar aunque Atlas falle
+        print(f"[setup] ERROR creando indices: {exc}")
     yield
 
 
-app = FastAPI(title="PDF Chat + Memoria (RAG)", lifespan=lifespan)
+app = FastAPI(title="GraphRAG sobre documentos y repos (MongoDB Atlas)", lifespan=lifespan)
 
 # Sirve los archivos estaticos (HTML/CSS/JS) en /static.
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
@@ -70,49 +83,102 @@ def list_documents(user_id: str = "demo-user"):
     return vector_search.list_documents(user_id)
 
 
-@app.post("/upload")
-async def upload_pdf(
-    file: UploadFile = File(...),
-    user_id: str = Form("demo-user"),
-    visibility: str = Form("public"),  # "public" o "private"
-):
-    """Recibe un PDF, detecta si tiene imagenes y lo indexa.
-
-    El procesamiento es sincrono por simplicidad (educacional).
-    """
-    if visibility not in ("public", "private"):
+def _check_visibility(v: str) -> None:
+    if v not in ("public", "private"):
         raise HTTPException(400, "visibility debe ser public o private.")
-    if not file.filename.lower().endswith(".pdf"):
-        raise HTTPException(400, "Solo se admiten archivos PDF.")
 
-    # Leemos el contenido binario del PDF.
-    pdf_bytes = await file.read()
-    if not pdf_bytes:
-        raise HTTPException(400, "El archivo esta vacio.")
 
+@app.post("/ingest/files")
+async def ingest_files(files: list[UploadFile] = File(...), user_id: str = Form("demo-user"),
+                       visibility: str = Form("public")):
+    """Fichero individual o carpeta (el navegador envia todos sus ficheros)."""
+    _check_visibility(visibility)
+    if len(files) > 50:
+        raise HTTPException(400, "Maximo 50 ficheros por peticion.")
+    results, skipped, errors = [], [], []
+    for f in files:
+        name = f.filename or ""
+        if not name.lower().endswith(loaders.SUPPORTED_EXTENSIONS):
+            if len(files) == 1:
+                raise HTTPException(400, "Formato no soportado (usa .pdf, .md o .txt).")
+            skipped.append(name)
+            continue
+        try:
+            results.append(ingest.ingest_file(name, await f.read(), user_id, visibility))
+        except Exception as exc:
+            errors.append({"file": name, "error": str(exc)})
+    return {"results": results, "skipped": skipped, "errors": errors}
+
+
+class GithubRequest(BaseModel):
+    urls: list[str]
+    user_id: str = "demo-user"
+    visibility: str = "public"
+
+
+@app.post("/ingest/github")
+def ingest_github(req: GithubRequest):
+    _check_visibility(req.visibility)
+    if not req.urls or len(req.urls) > 10:
+        raise HTTPException(400, "Indica entre 1 y 10 URLs.")
+    results, errors = [], []
+    for url in req.urls:
+        try:
+            results.append(github_ingest.ingest_repo(url, req.user_id, req.visibility))
+        except Exception as exc:
+            errors.append({"file": url, "error": str(exc)})
+    return {"results": results, "skipped": [], "errors": errors}
+
+
+def _settings_response() -> dict:
+    return {**settings.public_view(), "options": {
+        "strategies": config.STRATEGIES, "embedding_models": config.EMBEDDING_MODELS,
+        "chunk_size_range": config.CHUNK_SIZE_RANGE,
+        "fixed_chunk": [config.FIXED_CHUNK_SIZE, config.FIXED_CHUNK_OVERLAP]}}
+
+
+@app.get("/settings")
+def get_settings():
+    return _settings_response()
+
+
+@app.post("/settings")
+def post_settings(patch: dict = Body(...)):
+    """Guarda ajustes. llm_keys (API keys) solo se guardan en memoria del proceso."""
+    keys = patch.pop("llm_keys", None) or {}
+    before = settings.get()
     try:
-        resultado = pdf_processor.process_pdf(pdf_bytes)
+        for role, k in keys.items():
+            settings.set_api_key(role, k)
+        new = settings.update(patch) if patch else before
+        if new["embedding"]["auto_embed"] != before["embedding"]["auto_embed"]:
+            setup_indexes.ensure_auto_index(new["embedding"]["auto_embed"])
     except Exception as exc:
-        raise HTTPException(400, f"No se pudo leer el PDF: {exc}")
+        raise _http_error(exc)
+    if "llm" in patch or keys:
+        graph_store.reset_store()
+    return _settings_response()
 
-    # Indexamos segun si tiene imagenes o no.
-    if resultado["has_images"]:
-        n = embeddings.index_multimodal_documents(
-            resultado["multimodal_chunks"], file.filename, user_id, visibility
-        )
-        modelo = "voyage-multimodal"
-    else:
-        n = embeddings.index_text_document(
-            resultado["text_chunks"], file.filename, user_id, visibility
-        )
-        modelo = "voyage-context-4"
 
-    return {
-        "message": f"PDF '{file.filename}' indexado correctamente.",
-        "chunks": n,
-        "mode": modelo,
-        "has_images": resultado["has_images"],
-    }
+@app.get("/status")
+def status():
+    out: dict = {"indexes": [], "counts": {}}
+    try:
+        out["indexes"] = setup_indexes.index_status()
+        out["counts"] = {**vector_search.counts(), "entities": graph_store.count()}
+    except Exception as exc:
+        out["error"] = str(exc)
+    return out
+
+
+@app.get("/graph")
+def graph(entity: str = "", depth: int = 2, type: str = "Repository"):
+    try:
+        if entity:
+            return graph_view.subgraph_layout(graph_store.neighborhood(entity, depth), [entity])
+        return graph_view.subgraph_layout(graph_store.overview(type))
+    except Exception as exc:
+        raise _http_error(exc)
 
 
 @app.post("/chat")
@@ -173,25 +239,3 @@ def list_threads(user_id: str = "demo-user"):
 def get_thread(thread_id: str, user_id: str = "demo-user"):
     """Mensajes de una sesion (pregunta, respuesta y su flujo)."""
     return flow_store.get_thread(user_id, thread_id)
-
-
-# ---- Ajustes del LLM desde la UI (solo en memoria del proceso) ----
-class LLMConfig(BaseModel):
-    base_url: str = ""
-    api_key: str = ""
-    model: str = ""
-
-
-@app.get("/llm-config")
-def get_llm_config():
-    """Valores en uso. La API key NUNCA se devuelve, solo si existe."""
-    cfg = chat.llm_settings()
-    return {"base_url": cfg["base_url"], "model": cfg["model"], "has_key": bool(cfg["api_key"])}
-
-
-@app.post("/llm-config")
-def set_llm_config(cfg: LLMConfig):
-    """Guarda los valores SOLO en memoria (se pierden al parar el servidor).
-    Los campos vacios vuelven al valor del .env."""
-    chat.set_llm_override(cfg.base_url, cfg.api_key, cfg.model)
-    return get_llm_config()

@@ -14,21 +14,11 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 from bson import ObjectId
-from pymongo import MongoClient
-
 import config
-
-_mongo: MongoClient | None = None
-
+import db
 
 def _coll():
-    """Coleccion de flujos (cliente reutilizado entre llamadas)."""
-    global _mongo
-    if _mongo is None:
-        if not config.MONGODB_URI:
-            raise RuntimeError("Falta MONGODB_URI en el .env")
-        _mongo = MongoClient(config.MONGODB_URI)
-    return _mongo[config.MONGODB_DB][config.COLL_FLOWS]
+    return db.coll(config.COLL_FLOWS)
 
 
 def save_flow(user_id: str, thread_id: str, question: str,
@@ -43,6 +33,7 @@ def save_flow(user_id: str, thread_id: str, question: str,
         "memory": result.get("memory", {}),
         "documents": result.get("documents", 0),
         "tokens": result.get("tokens", {}),
+        "graph": result.get("graph"),
         "created_at": datetime.now(timezone.utc),
     }
     return str(_coll().insert_one(doc).inserted_id)

@@ -1,116 +1,98 @@
 # ============================================================
 #  setup_indexes.py
-#  ------------------------------------------------------------------
-#  Crea los indices de Atlas Vector Search EN CODIGO, no en la UI de
-#  Atlas. Asi el proyecto es reproducible con un solo comando.
-#
-#  Se ejecuta automaticamente al arrancar la app (ver main.py).
-#
-#  Indices que se crean (si no existen ya):
-#   * idx_vector_text      (coleccion texto)        -> vector, 1024d (voyage-context-4)
-#   * idx_vector_multimodal(coleccion multimodal)   -> vector, 1024d (voyage-multimodal)
-#
-#  pymongo usa create_search_index() con un "modelo" que describe
-#  la definicion JSON del indice, igual que en la consola de Atlas.
+#  Crea colecciones e indices EN CODIGO (reproducible, sin tocar la UI de Atlas).
+#   * idx_vector_context / idx_vector_multimodal: tipo "vector" (vectores de la app)
+#   * idx_auto_<modelo>: tipo "autoEmbed" (Atlas genera los vectores)
+#   * indices normales sobre el grafo (knowledge_graph)
 # ============================================================
 
 from __future__ import annotations
 
-from pymongo import MongoClient
-
 import config
+import db
+import settings
 
-DIMENSIONS = 1024  # dimension por defecto de voyage-context-4 y voyage-multimodal-3.5
-
-
-# Campos del indice: el vector + dos campos de FILTRO para controlar
-# la visibilidad (publico/privado) y el propietario del documento.
-VECTOR_FIELDS = [
-    {
-        "type": "vector",
-        "path": "embedding",
-        "numDimensions": DIMENSIONS,
-        "similarity": "cosine",
-    },
+FILTER_FIELDS = [
     {"type": "filter", "path": "metadata.visibility"},
     {"type": "filter", "path": "metadata.owner"},
+    {"type": "filter", "path": "metadata.model"},  # no mezclar vectores de modelos distintos
 ]
 
 
-def _client() -> MongoClient:
-    if not config.MONGODB_URI:
-        raise RuntimeError("Falta MONGODB_URI en el .env")
-    return MongoClient(config.MONGODB_URI)
+def vector_definition() -> dict:
+    return {"fields": [{"type": "vector", "path": "embedding",
+                        "numDimensions": config.VECTOR_DIMENSIONS, "similarity": "cosine"}, *FILTER_FIELDS]}
 
 
-def _create_if_missing(coll, index_name: str, definition: dict) -> None:
-    """Crea un indice de busqueda si aun no existe.
+def auto_embed_definition(model: str) -> dict:
+    # Ventaja MongoDB: no hay campo "embedding"; Atlas lee "text", llama a Voyage
+    # y guarda/sincroniza los vectores el solo.
+    return {"fields": [{"type": "autoEmbed", "modality": "text", "path": "text", "model": model},
+                       *FILTER_FIELDS]}
 
-    Si el indice ya existe no hacemos nada (idempotente), para poder
-    llamar a esta funcion en cada arranque sin errores.
-    """
+
+def auto_index_name(model: str) -> str:
+    return config.AUTO_INDEX_PREFIX + model
+
+
+def _create_if_missing(coll, name: str, definition: dict, editable: bool = True) -> None:
+    """Idempotente. Los indices autoEmbed no se pueden editar (editable=False)."""
     existing = {i.get("name"): i for i in coll.list_search_indexes()}
-    if index_name in existing:
-        # Si el indice existe pero con otra definicion (p.ej. le faltan los
-        # campos de filtro de visibilidad), lo actualizamos.
-        if existing[index_name].get("latestDefinition") != definition:
-            coll.update_search_index(index_name, definition)
-            print(f"[setup] indice '{index_name}' actualizado.")
+    if name in existing:
+        if existing[name].get("latestDefinition") != definition:
+            if editable:
+                coll.update_search_index(name, definition)
+                print(f"[setup] indice '{name}' actualizado.")
+            else:
+                print(f"[setup] AVISO '{name}' existe con otra definicion (autoEmbed no es editable).")
         else:
-            print(f"[setup] indice '{index_name}' ya existe.")
+            print(f"[setup] indice '{name}' ya existe.")
         return
-
-    coll.create_search_index(
-        {
-            "name": index_name,
-            "type": "vectorSearch",
-            "definition": definition,
-        }
-    )
-    print(f"[setup] indice '{index_name}' creado.")
+    coll.create_search_index({"name": name, "type": "vectorSearch", "definition": definition})
+    print(f"[setup] indice '{name}' creado.")
 
 
-def _ensure_collection(db, name: str):
-    """Crea la coleccion si no existe.
-
-    En Atlas, para crear un indice de Vector Search (autoEmbed/vector) la
-    coleccion debe existir previamente. Este helper la crea si falta.
-    """
-    if name not in db.list_collection_names():
-        db.create_collection(name)
+def _ensure_collection(database, name: str) -> None:
+    if name not in database.list_collection_names():
+        database.create_collection(name)
         print(f"[setup] coleccion '{name}' creada.")
 
 
+def ensure_auto_index(model: str) -> str:
+    """Un indice autoEmbed por modelo: cambiar de modelo = indice nuevo (Atlas re-embebe solo)."""
+    name = auto_index_name(model)
+    _create_if_missing(db.coll(config.COLL_AUTO), name, auto_embed_definition(model), editable=False)
+    return name
+
+
 def ensure_indexes() -> None:
-    """Crea todos los indices necesarios segun la configuracion."""
-    db = _client()[config.MONGODB_DB]
-    _ensure_collection(db, config.COLL_TEXT)
-    _ensure_collection(db, config.COLL_MULTIMODAL)
-    coll_text = db[config.COLL_TEXT]
-    coll_multimodal = db[config.COLL_MULTIMODAL]
+    database = db.get_db()
+    for n in (config.COLL_AUTO, config.COLL_CONTEXT, config.COLL_MULTIMODAL,
+              config.COLL_GRAPH, config.COLL_FLOWS, config.COLL_SETTINGS):
+        _ensure_collection(database, n)
 
-    # Documentos antiguos (subidos antes de existir la visibilidad) se
-    # consideran publicos.
-    for c in (coll_text, coll_multimodal):
-        c.update_many(
-            {"metadata.visibility": {"$exists": False}},
-            {"$set": {"metadata.visibility": "public", "metadata.owner": "demo-user"}},
-        )
+    for coll_name, idx in ((config.COLL_CONTEXT, config.VECTOR_INDEX_CONTEXT),
+                           (config.COLL_MULTIMODAL, config.VECTOR_INDEX_MULTIMODAL)):
+        try:
+            _create_if_missing(db.coll(coll_name), idx, vector_definition())
+        except Exception as exc:
+            print(f"[setup] AVISO {idx}: {exc}")
+    try:
+        ensure_auto_index(settings.get()["embedding"]["auto_embed"])
+    except Exception as exc:
+        print(f"[setup] AVISO autoEmbed: {exc}")
 
-    # Indice de TEXTO: la app guarda vectores de voyage-context-4 en "embedding".
-    _create_if_missing(
-        coll_text,
-        config.VECTOR_INDEX_TEXT_MANUAL,
-        {
-            "fields": VECTOR_FIELDS
-        },
-    )
+    # Indices normales del grafo. $graphLookup conecta por _id (ya indexado);
+    # el multikey sobre target_ids resuelve las aristas ENTRANTES ("quien usa X?").
+    g = db.coll(config.COLL_GRAPH)
+    g.create_index("type")
+    g.create_index("relationships.target_ids")
 
-    # Indice de MULTIMODAL: vectores de voyage-multimodal en "embedding".
-    _create_if_missing(
-        coll_multimodal,
-        config.VECTOR_INDEX_MULTIMODAL,
-        {
-            "fields": VECTOR_FIELDS
-        },
-    )
+
+def index_status() -> list[dict]:
+    out = []
+    for n in (config.COLL_AUTO, config.COLL_CONTEXT, config.COLL_MULTIMODAL):
+        for i in db.coll(n).list_search_indexes():
+            out.append({"collection": n, "name": i.get("name"), "type": i.get("type"),
+                        "status": i.get("status"), "queryable": i.get("queryable")})
+    return out

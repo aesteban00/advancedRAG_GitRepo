@@ -1,158 +1,106 @@
 # ============================================================
 #  vector_search.py
-#  ------------------------------------------------------------------
-#  Busca en MongoDB Atlas los chunks mas relevantes para una pregunta
-#  usando Atlas Vector Search ($vectorSearch) + re-ranking ($rerank).
-#
-#  Buscamos en DOS colecciones (porque hay dos estrategias):
-#    * documents_text      -> chunks de texto (voyage-context-4)
-#    * documents_multimodal-> chunks con imagenes (voyage-multimodal)
-#  Y unimos los resultados como contexto para el LLM.
-#
-#  El $rerank usa un modelo de Voyage AI para REORDENAR los resultados
-#  de la busqueda vectorial segun su relevancia real a la pregunta,
-#  mejorando la precision de la respuesta final.
+#  $vectorSearch (+ $rerank) sobre las 3 colecciones de chunks.
+#  Ventaja MongoDB: con autoEmbed ni siquiera generamos el vector de la
+#  pregunta; Atlas lo hace con el mismo modelo del indice.
 # ============================================================
 
 from __future__ import annotations
 
-from pymongo import MongoClient
+from pymongo.errors import OperationFailure
 
 import config
+import db
 import embeddings
-
-TOP_K = 4  # cuantos chunks recuperamos por coleccion
-
-
-def _client() -> MongoClient:
-    if not config.MONGODB_URI:
-        raise RuntimeError("Falta MONGODB_URI en el .env")
-    return MongoClient(config.MONGODB_URI)
+import settings
+from setup_indexes import auto_index_name
 
 
 def _rerank_stage(query: str) -> list[dict]:
-    """Devuelve los stages de re-ranking ($rerank + extraccion del score).
-
-    Si RERANK_ENABLED es false, devolvemos una lista vacia (sin rerank).
-    $rerank reordena los documentos usando el texto de la pregunta y el
-    campo "text" de cada documento. El nuevo score se guarda en
-    "rerankScore" con $addFields.
-    """
     if not config.RERANK_ENABLED:
         return []
-
-    return [
-        {
-            "$rerank": {
-                "model": config.RERANK_MODEL,
-                "query": {"text": query},
-                "numDocsToRerank": config.RERANK_NUM_DOCS,
-                "path": "text",
-            }
-        },
-        {"$addFields": {"rerankScore": {"$meta": "score"}}},
-    ]
+    return [{"$rerank": {"model": config.RERANK_MODEL, "query": {"text": query},
+                         "numDocsToRerank": config.RERANK_NUM_DOCS, "path": "text"}},
+            {"$addFields": {"rerankScore": {"$meta": "score"}}}]
 
 
-def _project_stage() -> dict:
-    """Proyecta los campos que nos interesan y el score final.
-
-    Si hay rerank, el score relevante es rerankScore; si no, usamos el
-    score de la busqueda vectorial.
-    """
-    if config.RERANK_ENABLED:
-        return {"$project": {"text": 1, "metadata": 1, "score": "$rerankScore"}}
-    return {"$project": {"text": 1, "metadata": 1, "score": {"$meta": "vectorSearchScore"}}}
+def _project_stage(coll_name: str) -> dict:
+    score = "$rerankScore" if config.RERANK_ENABLED else {"$meta": "vectorSearchScore"}
+    return {"$project": {"text": 1, "metadata": 1, "score": score, "collection": {"$literal": coll_name}}}
 
 
 def _visibility_filter(user_id: str) -> dict:
-    """Un usuario ve los documentos publicos y los privados que subio el."""
-    return {"$or": [
-        {"metadata.visibility": "public"},
-        {"metadata.owner": user_id},
-    ]}
+    return {"$or": [{"metadata.visibility": "public"}, {"metadata.owner": user_id}]}
 
 
-def _search_text(query: str, user_id: str) -> list[dict]:
-    """Ejecuta $vectorSearch (+ $rerank) sobre la coleccion de texto."""
-    coll = _client()[config.MONGODB_DB][config.COLL_TEXT]
-    vector = embeddings.embed_query_text_manual(query)
-
-    pipeline = [
-        {
-            "$vectorSearch": {
-                "index": config.VECTOR_INDEX_TEXT_MANUAL,
-                "path": "embedding",
-                "queryVector": vector,
-                "numCandidates": TOP_K * 10,
-                "limit": TOP_K,
-                "filter": _visibility_filter(user_id),
-            }
-        },
-        *_rerank_stage(query),
-        _project_stage(),
-    ]
-    return list(coll.aggregate(pipeline))
+def _filter(user_id: str, model: str) -> dict:
+    return {"$and": [_visibility_filter(user_id), {"metadata.model": model}]}
 
 
-def _search_multimodal(query: str, user_id: str) -> list[dict]:
-    """Ejecuta $vectorSearch (+ $rerank) sobre la coleccion multimodal."""
-    coll = _client()[config.MONGODB_DB][config.COLL_MULTIMODAL]
-    vector = embeddings.embed_query_multimodal_manual(query)
+def _run(coll_name: str, stage: dict, query: str) -> list[dict]:
+    pipeline = [{"$vectorSearch": stage}, *_rerank_stage(query), _project_stage(coll_name)]
+    return list(db.coll(coll_name).aggregate(pipeline))
 
-    pipeline = [
-        {
-            "$vectorSearch": {
-                "index": config.VECTOR_INDEX_MULTIMODAL,
-                "path": "embedding",
-                "queryVector": vector,
-                "numCandidates": TOP_K * 10,
-                "limit": TOP_K,
-                "filter": _visibility_filter(user_id),
-            }
-        },
-        *_rerank_stage(query),
-        _project_stage(),
-    ]
-    return list(coll.aggregate(pipeline))
+
+def _search_auto(query: str, user_id: str, top_k: int) -> list[dict]:
+    model = settings.get()["embedding"]["auto_embed"]
+    stage = {"index": auto_index_name(model), "path": "text", "query": {"text": query},
+             "numCandidates": top_k * 20, "limit": top_k, "filter": _filter(user_id, model)}
+    try:
+        return _run(config.COLL_AUTO, stage, query)
+    except OperationFailure as exc:
+        if "query" not in str(exc).lower():
+            raise
+        # Versiones preview de autoEmbed usaban "query" como string.
+        return _run(config.COLL_AUTO, {**stage, "query": query}, query)
+
+
+def _search_context(query: str, user_id: str, top_k: int) -> list[dict]:
+    model = settings.get()["embedding"]["voyage_context"]
+    stage = {"index": config.VECTOR_INDEX_CONTEXT, "path": "embedding",
+             "queryVector": embeddings.embed_context([query], model, "query")[0],
+             "numCandidates": top_k * 20, "limit": top_k, "filter": _filter(user_id, model)}
+    return _run(config.COLL_CONTEXT, stage, query)
+
+
+def _search_multimodal(query: str, user_id: str, top_k: int) -> list[dict]:
+    model = settings.get()["embedding"]["voyage_multimodal"]
+    stage = {"index": config.VECTOR_INDEX_MULTIMODAL, "path": "embedding",
+             "queryVector": embeddings.embed_multimodal([query], model, "query"),
+             "numCandidates": top_k * 20, "limit": top_k, "filter": _filter(user_id, model)}
+    return _run(config.COLL_MULTIMODAL, stage, query)
+
+
+def search(query: str, user_id: str, top_k: int) -> list[dict]:
+    """Busca en las 3 colecciones (salta las vacias) y concatena: son espacios
+    vectoriales distintos, asi que no se ordenan entre si (simplificacion didactica)."""
+    results = []
+    for name, fn in ((config.COLL_AUTO, _search_auto), (config.COLL_CONTEXT, _search_context),
+                     (config.COLL_MULTIMODAL, _search_multimodal)):
+        try:
+            if db.coll(name).estimated_document_count() == 0:
+                continue
+            results += fn(query, user_id, top_k)
+        except Exception as exc:
+            print(f"[aviso] busqueda en {name}: {exc}")
+    return results
 
 
 def list_documents(user_id: str) -> dict:
-    """Lista los PDFs visibles: todos los publicos + los privados de user_id."""
-    db = _client()[config.MONGODB_DB]
     pipeline = [
-        {"$match": {"$or": [
-            {"metadata.visibility": "public"},
-            {"metadata.owner": user_id},
-        ]}},
-        {"$group": {
-            "_id": {
-                "filename": "$metadata.filename",
-                "owner": "$metadata.owner",
-                "visibility": "$metadata.visibility",
-            },
-            "chunks": {"$sum": 1},
-        }},
+        {"$match": _visibility_filter(user_id)},
+        {"$group": {"_id": {"source": "$metadata.source", "owner": "$metadata.owner",
+                            "visibility": "$metadata.visibility", "strategy": "$metadata.strategy"},
+                    "chunks": {"$sum": 1}}},
     ]
     docs = []
-    for name in (config.COLL_TEXT, config.COLL_MULTIMODAL):
-        for r in db[name].aggregate(pipeline):
-            docs.append({**r["_id"], "chunks": r["chunks"]})
-    docs.sort(key=lambda d: d["filename"] or "")
-    return {
-        "public": [d for d in docs if d["visibility"] == "public"],
-        "private": [d for d in docs if d["visibility"] == "private" and d["owner"] == user_id],
-    }
+    for n in (config.COLL_AUTO, config.COLL_CONTEXT, config.COLL_MULTIMODAL):
+        docs += [{**r["_id"], "chunks": r["chunks"]} for r in db.coll(n).aggregate(pipeline)]
+    docs.sort(key=lambda d: d["source"] or "")
+    return {"public": [d for d in docs if d["visibility"] == "public"],
+            "private": [d for d in docs if d["visibility"] == "private" and d["owner"] == user_id]}
 
 
-def search(query: str, user_id: str = "demo-user") -> list[dict]:
-    """Busca en ambas colecciones y devuelve los chunks mas relevantes.
-
-    Nota educativa: los resultados vienen de dos espacios vectoriales
-    distintos, asi que en vez de ordenarlos entre si simplemente los
-    concatenamos como contexto (simplificacion a proposito para el
-    proposito educativo de este proyecto).
-    """
-    results = _search_text(query, user_id)
-    results += _search_multimodal(query, user_id)
-    return results
+def counts() -> dict:
+    return {n: db.coll(n).estimated_document_count()
+            for n in (config.COLL_AUTO, config.COLL_CONTEXT, config.COLL_MULTIMODAL)}

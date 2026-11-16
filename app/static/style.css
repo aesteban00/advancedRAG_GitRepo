@@ -198,7 +198,11 @@ button.toggle[data-visibility="private"] { background: #fff4d6; border-color: #f
 
 /* ---- Panel de flujo (derecha) ---- */
 .flow {
-  width: 320px;
+  width: 420px;
+  height: calc(100vh - 88px);
+  display: flex;
+  flex-direction: column;
+  padding: 18px !important;
   flex-shrink: 0;
   position: sticky;
   top: 20px;
@@ -294,3 +298,31 @@ button.toggle[data-visibility="private"] { background: #fff4d6; border-color: #f
 .llm-form input { padding: 6px 8px; border: 1px solid #b8c4c2; border-radius: 6px; font-size: 0.8rem; }
 
 .llm-note { margin-top: 4px; word-break: break-all; }
+
+/* ---- Pestanas, configuracion y grafo ---- */
+.topbar { display: flex; align-items: center; }
+.main-tabs { margin-left: auto; display: flex; gap: 6px; }
+.main-tabs button { background: transparent; border: 1px solid transparent; color: inherit; padding: 6px 14px; border-radius: 999px; cursor: pointer; }
+.main-tabs button.active { background: #e3fcf7; color: var(--green-dark); border-color: var(--green); }
+.view { display: flex; gap: 24px; align-items: flex-start; flex: 1; min-width: 0; }
+.view[hidden] { display: none; }
+#view-config { flex-direction: column; }
+.config-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(380px, 1fr)); gap: 16px; width: 100%; }
+.fld, .chk { display: flex; font-size: 0.85rem; margin: 8px 0; }
+.fld { flex-direction: column; gap: 4px; }
+.chk { gap: 8px; align-items: center; }
+.fld input[type=text], .fld select, .fld textarea, .fld input[type=number] { padding: 6px 8px; border: 1px solid #b8c4c2; border-radius: 6px; }
+input[type=range]:disabled { opacity: 0.4; }
+.ingest-log { list-style: none; padding: 0; font-size: 0.8rem; }
+.ingest-log .warn { background: none; border: 0; color: #6b4a00; padding: 0; margin: 0; }
+.ingest-log .error { color: #db3030; } .ingest-log .skip { color: var(--muted); } .ingest-log .ok { color: var(--green-dark); }
+.status-table { width: 100%; font-size: 0.78rem; border-collapse: collapse; margin-top: 8px; }
+.status-table th, .status-table td { text-align: left; padding: 3px 6px; border-bottom: 1px solid var(--border); }
+.flow-top { flex: 1; overflow: auto; min-height: 0; }
+.graph-panel { height: 45vh; display: flex; flex-direction: column; border-top: 1px solid var(--border); padding-top: 8px; }
+.graph-head { display: flex; gap: 6px; align-items: center; }
+.graph-head h3 { margin: 0 auto 0 0 !important; border: 0 !important; padding: 0 !important; }
+.graph-head input { width: 140px; padding: 4px 6px; border: 1px solid #b8c4c2; border-radius: 6px; font-size: 0.75rem; }
+#graph-svg { flex: 1; width: 100%; min-height: 0; background: #f9fbfa; border-radius: 8px; }
+.graph-legend { display: flex; flex-wrap: wrap; gap: 8px; font-size: 0.7rem; margin-top: 4px; }
+.legend-item i { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 3px; }

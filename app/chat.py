@@ -4,7 +4,7 @@
 #  Orquesta el pipeline del chat:
 #
 #   1. Recuperar contexto de MEMORIA  (conversaciones anteriores)
-#   2. Recuperar contexto de DOCUMENTOS (Atlas Vector Search)
+#   2. Recuperar contexto de DOCUMENTOS (Atlas Vector Search) y del GRAFO ($graphLookup)
 #   3. Construir el prompt del sistema con ambos contextos
 #   4. Llamar a DeepSeek para generar la respuesta
 #   5. Registrar el turno en la memoria
@@ -20,37 +20,18 @@ import time
 from openai import OpenAI
 
 import config
+import graph_store
+import graph_view
 import memory
+import settings
 import vector_search
 
 
-# Ajustes del LLM introducidos desde la UI. Solo viven en la MEMORIA del
-# proceso: no se escriben en disco ni en la BBDD y se pierden al parar la demo.
-_override = {"base_url": "", "api_key": "", "model": ""}
-
-
-def set_llm_override(base_url: str, api_key: str, model: str) -> None:
-    """Fija los valores del LLM en memoria. Una API key vacia mantiene la actual."""
-    _override["base_url"] = base_url.strip()
-    _override["model"] = model.strip()
-    if api_key.strip():
-        _override["api_key"] = api_key.strip()
-
-
-def llm_settings() -> dict:
-    """Valores efectivos: lo de la UI si existe; si no, lo del .env."""
-    return {
-        "base_url": _override["base_url"] or config.DEEPSEEK_BASE_URL,
-        "api_key": _override["api_key"] or config.DEEPSEEK_API_KEY,
-        "model": _override["model"] or config.DEEPSEEK_MODEL,
-    }
-
-
-def _llm() -> OpenAI:
-    """Crea el cliente del LLM (compatible con OpenAI)."""
-    cfg = llm_settings()
+def _llm(role: str = "chat") -> OpenAI:
+    """Cliente del LLM (compatible con OpenAI) segun la pestana Configuracion."""
+    cfg = settings.llm(role)
     if not cfg["api_key"]:
-        raise RuntimeError("Falta la API key del LLM (.env o panel derecho)")
+        raise RuntimeError(f"Falta la API key del LLM de {role} (.env o Configuracion)")
     return OpenAI(api_key=cfg["api_key"], base_url=cfg["base_url"])
 
 
@@ -64,31 +45,32 @@ def _usage(response) -> dict:
     }
 
 
-def _build_system_prompt(memory_ctx: str, docs_ctx: list[dict]) -> str:
-    """Construye el mensaje de sistema con el contexto para el LLM.
+def _format_entity(e: dict) -> str:
+    """Una linea por entidad: id (tipo) attrs | relaciones | fuentes."""
+    attrs = e.get("attributes") or {}
+    sources = ", ".join(attrs.get("sources", []))
+    shown = "; ".join(f"{k}={','.join(map(str, v))}"[:200] for k, v in attrs.items() if k != "sources" and v)
+    rel = e.get("relationships") or {}
+    targets, types = rel.get("target_ids", []), rel.get("types", [])
+    rels = " ; ".join(f"-> {types[i] if i < len(types) else '?'} {t}" for i, t in enumerate(targets))
+    return f"- {e.get('_id')} ({e.get('type', '?')}) attrs: {shown} | {rels} | fuentes: {sources}"
 
-    memory_ctx: recuerdos de conversaciones pasadas (o vacio).
-    docs_ctx:   chunks recuperados de los PDFs (o vacio).
-    """
+
+def _build_system_prompt(memory_ctx: str, docs_ctx: list[dict], entities: list[dict]) -> str:
     partes = [
-        "Eres un asistente que responde preguntas sobre documentos PDF "
-        "que el usuario ha subido. Usa SOLO el contexto proporcionado "
-        "para responder. Si no hay informacion suficiente, dilo."
+        "Eres un asistente que responde sobre la documentacion y los repositorios de codigo indexados. "
+        "Usa SOLO el contexto proporcionado. Cita la fuente entre corchetes tras cada afirmacion "
+        "([fuente - pag. N] o [grafo: _id]). Si el contexto no cubre la pregunta, dilo claramente: no inventes."
     ]
-
     if memory_ctx:
         partes.append("## Recuerdos de conversaciones anteriores\n" + memory_ctx)
-
     if docs_ctx:
-        # Formateamos cada chunk con su procedencia (archivo y pagina).
-        bloques = []
-        for d in docs_ctx:
-            meta = d.get("metadata", {})
-            archivo = meta.get("filename", "desconocido")
-            pagina = meta.get("page", "?")
-            bloques.append(f"[{archivo} · pág. {pagina}]\n{d.get('text', '')}")
+        bloques = [f"[{d.get('metadata', {}).get('source', 'desconocido')} - pag. "
+                   f"{d.get('metadata', {}).get('page', '?')}]\n{d.get('text', '')}" for d in docs_ctx]
         partes.append("## Fragmentos de los documentos\n" + "\n\n".join(bloques))
-
+    if entities:
+        partes.append("## Grafo de conocimiento (entidades y relaciones)\n"
+                      + "\n".join(_format_entity(e) for e in entities[:60]))
     return "\n\n".join(partes)
 
 
@@ -111,7 +93,7 @@ def _answer_from_memory(question: str, memory_ctx: str) -> tuple[str | None, dic
         "## Recuerdos\n" + memory_ctx
     )
     response = _llm().chat.completions.create(
-        model=llm_settings()["model"],
+        model=settings.llm("chat")["model"],
         messages=[
             {"role": "system", "content": system},
             {"role": "user", "content": question},
@@ -188,36 +170,58 @@ def answer_stream(question: str, thread_id: str, use_memory: bool = True,
         else:
             yield _step("memory_answer", label, "done", "no basta → buscar en la BBDD", t0, mu)
 
-    # Paso 3: si la memoria no basto, BBDD (Atlas Vector Search + rerank) y LLM.
+    # Paso 3: si la memoria no basto, recuperacion (vector y/o grafo) y LLM.
+    graph_entities: list[dict] = []
+    graph_start: list[str] = []
     if answer_text is None:
+        r = settings.get()["retrieval"]
+        mode = r["mode"]
         rerank = " + $rerank" if config.RERANK_ENABLED else ""
         label = "BBDD · $vectorSearch" + rerank
-        yield _step("db_search", label, "running")
-        t0 = time.time()
-        try:
-            docs_ctx = vector_search.search(question, user_id)
-            files = sorted({d.get("metadata", {}).get("filename", "?") for d in docs_ctx})
-            detail = f"{len(docs_ctx)} fragmentos · " + (", ".join(files) if files else "sin resultados")
-            yield _step("db_search", label, "done", detail, t0)
-        except Exception as exc:
-            print(f"[aviso] No se pudo buscar en documentos: {exc}")
-            yield _step("db_search", label, "error", str(exc)[:120], t0)
+        if mode in ("hybrid", "vector"):
+            yield _step("db_search", label, "running")
+            t0 = time.time()
+            try:
+                docs_ctx = vector_search.search(question, user_id, r["top_k"])
+                files = sorted({d.get("metadata", {}).get("source", "?") for d in docs_ctx})
+                yield _step("db_search", label, "done",
+                            f"{len(docs_ctx)} fragmentos · " + (", ".join(files) if files else "sin resultados"), t0)
+            except Exception as exc:
+                print(f"[aviso] No se pudo buscar en documentos: {exc}")
+                yield _step("db_search", label, "error", str(exc)[:120], t0)
+        else:
+            yield _step("db_search", label, "skipped", "modo grafo")
 
-        model = llm_settings()["model"]
+        glabel = "Grafo · LLM entidades + $graphLookup"
+        if mode in ("hybrid", "graph"):
+            yield _step("graph_search", glabel, "running")
+            t0 = time.time()
+            try:
+                g = graph_store.retrieve(question, r["graph_depth"])
+                graph_entities, graph_start = g["entities"], g["start"]
+                detail = (f"inicio: {', '.join(graph_start)} · {len(graph_entities)} entidades" if graph_start
+                          else "no se reconocieron entidades del grafo")
+                yield _step("graph_search", glabel, "done", detail, t0)
+            except Exception as exc:
+                print(f"[aviso] No se pudo consultar el grafo: {exc}")
+                yield _step("graph_search", glabel, "error", str(exc)[:120], t0)
+        else:
+            yield _step("graph_search", glabel, "skipped", "modo vector")
+
+        model = settings.llm("chat")["model"]
         yield _step("llm", f"LLM · {model}", "running")
         t0 = time.time()
-        system = _build_system_prompt(memory_ctx, docs_ctx)
+        system = _build_system_prompt(memory_ctx, docs_ctx, graph_entities)
         response = _llm().chat.completions.create(
             model=model,
-            messages=[
-                {"role": "system", "content": system},
-                {"role": "user", "content": question},
-            ],
+            messages=[{"role": "system", "content": system}, {"role": "user", "content": question}],
         )
         answer_text = response.choices[0].message.content
         lu = _usage(response)
         add(lu)
         yield _step("llm", f"LLM · {model}", "done", "respuesta generada", t0, lu)
+    else:
+        yield _step("graph_search", "Grafo · LLM entidades + $graphLookup", "skipped", "la memoria ya tenia la respuesta")
 
     # Paso 4: memoria (guardar el turno).
     if use_memory:
@@ -239,6 +243,8 @@ def answer_stream(question: str, thread_id: str, use_memory: bool = True,
         "memory": memory_counts,
         "documents": len(docs_ctx),
         "tokens": usage_total,
+        "graph": graph_view.subgraph_layout(graph_entities, highlight=graph_start),
+        "sources": sorted({d.get("metadata", {}).get("source", "?") for d in docs_ctx}),
     }
 
 

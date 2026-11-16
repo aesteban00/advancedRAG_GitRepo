@@ -1,205 +1,70 @@
-# Chat sobre PDFs con RAG + Memoria (MongoDB Atlas)
+# GraphRAG avanzado sobre documentos y repos de GitHub (MongoDB Atlas)
 
-Proyecto **educacional** en Python: subes PDFs, se indexan automáticamente
-con embeddings de **VoyageAI** vía **MongoDB Atlas**, y luego chateas sobre
-ellos con **DeepSeek**. El chat **recuerda conversaciones anteriores**
-gracias a **MongoDB Atlas Agent Engine Memory**.
+Proyecto **educacional** en Python: sube documentos (`.pdf`, `.md`, `.txt`) o analiza repositorios de GitHub y pregunta sobre ellos en un chat que combina **búsqueda vectorial** y **GraphRAG**, todo sobre **una sola plataforma: MongoDB Atlas**. Cada respuesta cita sus fuentes y muestra el subgrafo usado (NetworkX).
 
-Máxima prioridad: **sencillez y código comentado**.
+## Por qué MongoDB
+
+| Ventaja | Dónde se ve |
+|---|---|
+| **Una sola base de conocimiento**: chunks, vectores, grafo, memoria, flujos y ajustes en el mismo cluster | BD `graphrag_demo` |
+| **Grafo nativo con `$graphLookup`**: un documento por entidad, recorrido dentro de la BD (sin cargar el grafo en memoria ni una base de grafos aparte) | `graph_store.py` |
+| **Automated Embedding (`autoEmbed`)**: Atlas genera y sincroniza los vectores con Voyage AI; la app solo inserta texto | estrategia `auto_embed` |
+| **Voyage AI y `$rerank` integrados** | estrategias manuales + `$rerank` |
+| **Esquema flexible**: repos, librerías, endpoints, funciones, documentos… en la misma colección | `knowledge_graph` |
+| **Respuestas con fuente**: cada chunk y cada entidad guardan su origen | prompt y citas |
 
 ## Arquitectura
 
 ```
-PDF ──> pdf_processor (detecta imagenes) ──> embeddings (VoyageAI) ──> MongoDB Atlas
-                                                                         │
-Chat <── DeepSeek <── chat.py <── vector_search (Atlas Vector Search) ──┘
-   │                 (memoria: agent-engine-sdk-memory)
-   └───────────────────────────────────────────────────────────────────> recordar
+ ficheros / carpeta ─► loaders ─► chunking ─► ingest ─┬─► chunks_auto | chunks_context | chunks_multimodal
+ URLs GitHub ─► github_ingest ─┬─ grafo determinista ─┼─► knowledge_graph  (+ LLM de grafo: MongoDBGraphStore)
+                               └─ README/docs ────────┘
+ Chat ─► memoria (Agent Engine) ─► $vectorSearch + $rerank ─┐
+                               └─► entidades (LLM) + $graphLookup ─► LLM de chat ─► respuesta + subgrafo (NetworkX → SVG)
 ```
 
-### Estrategia de embedding (según el PDF)
+## Estrategias de ingesta (pestaña Configuración)
 
-Solo hay **dos** opciones, elegidas automáticamente según el contenido del PDF:
+| Estrategia | Vectores | Chunking | Colección | Índice |
+|---|---|---|---|---|
+| `auto_embed` | Atlas (`autoEmbed`) | **tamaño y solape elegibles** | `chunks_auto` | `idx_auto_<modelo>` |
+| `voyage_context` | app → `voyage-context-4` | fijo (1000/200) | `chunks_context` | `idx_vector_context` |
+| `voyage_multimodal` | app → `voyage-multimodal-3.5` | página = chunk | `chunks_multimodal` | `idx_vector_multimodal` |
 
-| Contenido del PDF      | Modelo                           | Qué se indexa        |
-|------------------------|----------------------------------|----------------------|
-| Solo texto             | `voyage-context-4`               | chunks de texto      |
-| Con texto y/o imágenes | `voyage-multimodal-3.5`          | texto + imágenes     |
+Se puede elegir un modelo de **embedding**, un **LLM para construir el grafo** y otro **para el chat** (por defecto el mismo, el del `.env`).
 
-> **Detección automática:** al subir un PDF, `pdf_processor` detecta si
-> contiene imágenes. Si las tiene → `voyage-multimodal-3.5`; si es solo
-> texto → `voyage-context-4`. No hay que elegir nada a mano.
+## GraphRAG
 
-### Re-ranking con `$rerank`
+Cada entidad es un documento `{_id, type, attributes, relationships:{target_ids, types, attributes}}` (formato de `MongoDBGraphStore`, [guía oficial](https://www.mongodb.com/docs/atlas/ai-integrations/langchain/graph-rag/)). La consulta extrae entidades de la pregunta con el LLM, recorre salientes con `$graphLookup` y entrantes con un índice multikey sobre `relationships.target_ids` ("¿quién usa X?").
 
-Al consultar, los resultados del `$vectorSearch` se **reordenan** con el
-stage `$rerank` de MongoDB (usa un modelo de re-ranking de Voyage AI) para
-devolver los chunks más relevantes a la pregunta. Esto mejora la precisión
-de las respuestas. Está activado y fijo en `app/config.py`
-(`RERANK_ENABLED`, `RERANK_MODEL = "rerank-3"`, `RERANK_NUM_DOCS = 50`).
+De cada repo de GitHub se extrae, sin LLM: descripción, librerías y versiones (requirements, pyproject, package.json, go.mod, pom.xml), BBDD/servicios, endpoints (FastAPI/Flask/Express/Spring), propietario (CODEOWNERS), ficheros/clases/funciones Python con sus llamadas, y relaciones entre repos (librería interna o endpoint consumido). README y `docs/*.md` pasan por la ingesta normal.
 
-> **Requisitos de `$rerank`:** cluster MongoDB **9.0 o superior**, la
-> opción **Native Reranking** habilitada en Project Settings de Atlas, y
-> para `rerank-3` un **cluster dedicado (M10 o superior)**.
+## Requisitos
+- Python 3.11+
+- Cluster Atlas con Vector Search y Automated Embedding; `$rerank` requiere MongoDB 9.0+ y M10+ con Native Reranking (si no, `RERANK_ENABLED = False` en `app/config.py`)
+- Claves: LLM compatible OpenAI, Voyage AI, `MONGODB_URI`; opcional `GITHUB_TOKEN` (60 → 5000 peticiones/h) y Agent Engine Memory
 
-### Memoria (Atlas Agent Engine Memory)
-
-La memoria de las conversaciones la gestiona **MongoDB Atlas Agent Engine
-Memory** y se almacena en el **mismo cluster** que los documentos. Requiere
-una **organización Atlas-backed** (vinculada a un proyecto de Atlas).
-
+## Ejecución
 ```bash
-# 0) Prerrequisitos
-#  - Org de Atlas Agent Engine Atlas-backed (con un cluster de Atlas)
-#  - CLI instalado y autenticado:  agentengine auth login
-#  - Credenciales de service-account de Atlas (para el setup de IPs)
-
-# 1) Crear un proyecto de memoria (project-config.yaml con el bloque memory:)
-agentengine create --memory-only --name "Mi Proyecto"
-
-# 2) Crear un context apuntando al proyecto Atlas-backed
-agentengine context create mi-memoria \
-  --org-id <org-id-atlas-backed> \
-  --project-id <project-id-atlas> \
-  --base-url https://agentengine.mongodb.com
-
-# 3) Subir secretos (MONGODB_URI = mismo cluster que documentos)
-agentengine secret set MONGODB_URI --project-scope
-agentengine secret set VOYAGE_API_KEY --project-scope
-agentengine secret set LLM_API_KEY --project-scope
-agentengine secret set MONGODB_DATABASE --project-scope
-
-# 4) Aplicar la configuracion de memoria
-agentengine memory configure --context mi-memoria
-agentengine memory apply --wait --context mi-memoria
-
-# 5) Añadir las IPs del data plane de Agent Engine al cluster
-#    (requiere perfil Atlas valido y el proyecto ligado)
-agentengine atlas profile save --context mi-memoria
-agentengine atlas setup-ip-access --context mi-memoria
-
-# 6) Crear un service-account (devuelve client id y client secret)
-agentengine service-account create memory-service --context mi-memoria --role PROJECT_OWNER
-```
-
-En el `.env` de la app se necesitan:
-```
-AGENTIC_MEMORY_PROJECT_ID=<project-id>
-AGENTIC_MEMORY_CLIENT_ID=<client-id>
-AGENTIC_MEMORY_CLIENT_SECRET=<client-secret>
-```
-
-> **Notas:**
-> - El **service-account** con rol `PROJECT_OWNER`/`PROJECT_READ_ONLY` exige
->   el **"Atlas service account pairing"** habilitado en el proyecto.
-> - La app canjea el client id/secret por un token de acceso y lo renueva sola.
-> - El **IP access list** del cluster debe permitir el tráfico del data plane
->   de Agent Engine (se añade con `atlas setup-ip-access`).
-
-## Requisitos previos
-
-1. Python 3.11 o superior (requerido por el SDK de Agent Engine Memory).
-2. Un cluster **MongoDB Atlas** (M10+ recomendado para Vector Search).
-3. Una API key de **VoyageAI**.
-4. Una API key de **DeepSeek**.
-5. Acceso a **Agent Engine Memory** (client id/secret de service-account + project id,
-   o un backend local).
-
-## Instalación y ejecución
-
-```bash
-# 1) Clonar y entrar
-git clone <repo-url>
-cd advancedRAG_memory
-
-# 2) Crear entorno virtual e instalar dependencias
-python3.11 -m venv .venv
-source .venv/bin/activate
+python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-
-# 3) Configurar credenciales
-cp .env.example .env
-# ... editar .env con tus credenciales reales ...
-
-# 4) Arrancar la UI (los indices se crean solos en el arranque)
-uvicorn app.main:app --reload --port 8090
+cp .env.example .env      # rellena credenciales
+uvicorn app.main:app --reload
 ```
+Abre http://127.0.0.1:8000. Los índices se crean en código al arrancar (logs `[setup]`).
 
-Abre http://localhost:8090 en el navegador.
+Preguntas de ejemplo: "¿Qué librerías y versiones usa owner/repo?", "¿Qué repos usan MongoDB?", "¿Qué endpoints expone X?", "¿Qué se ve afectado si cambia Y?".
 
-## Crear los índices (automático)
+## Limitaciones (a propósito)
+Sin MCP ni Databricks, sin autenticación/roles, sin actualización automática de repos, AST solo para Python (otros lenguajes: endpoints por regex), ingesta síncrona, sin streaming de tokens.
 
-Los índices de Atlas Vector Search **se crean en código**, no en la UI de
-Atlas. Al arrancar la app (`app/setup_indexes.py`) se aseguran estos dos
-índices si no existen ya:
-
-| Índice | Colección | Tipo | Campo |
-|---|---|---|---|
-| `idx_vector_text` | `documents_text` | `vector` | `embedding` / 1024 dims |
-| `idx_vector_multimodal` | `documents_multimodal` | `vector` | `embedding` / 1024 dims |
-
-Si prefieres crearlos a mano, las definiciones JSON equivalentes son:
-
-### 1) `documents_text` — índice vector texto (`voyage-context-4`)
-```json
-{
-  "name": "idx_vector_text",
-  "type": "vectorSearch",
-  "fields": [
-    { "type": "vector", "path": "embedding", "numDimensions": 1024, "similarity": "cosine" }
-  ]
-}
-```
-
-### 2) `documents_multimodal` — índice vector multimodal (`voyage-multimodal`)
-```json
-{
-  "name": "idx_vector_multimodal",
-  "type": "vectorSearch",
-  "fields": [
-    { "type": "vector", "path": "embedding", "numDimensions": 1024, "similarity": "cosine" }
-  ]
-}
-```
-
-## Variables de entorno (`.env`)
-
-El `.env` contiene solo las **credenciales**. Modelos de Voyage, base de datos,
-colecciones, índices y re-ranking están fijos en `app/config.py`.
-
-| Variable | Descripción |
-|---|---|
-| `DEEPSEEK_API_KEY` | API key del LLM (también editable en caliente desde la UI) |
-| `DEEPSEEK_BASE_URL` / `DEEPSEEK_MODEL` | (opcionales) URL base y modelo del LLM |
-| `VOYAGE_API_KEY` | API key de VoyageAI |
-| `MONGODB_URI` | Cadena de conexión a Atlas |
-| `AGENTIC_MEMORY_PROJECT_ID` | Project id de Agent Engine Memory |
-| `AGENTIC_MEMORY_CLIENT_ID` / `AGENTIC_MEMORY_CLIENT_SECRET` | Credenciales del service account de Agent Engine Memory |
-| `AGENTIC_MEMORY_BASE_URL` | (opcional) backend local de memoria |
-
-## Estructura del proyecto
-
-```
-app/
-├── main.py           # FastAPI + rutas (/ , /upload, /chat)
-├── config.py         # credenciales (.env) y ajustes fijos
-├── setup_indexes.py  # crea los indices de Atlas Vector Search (en codigo)
-├── pdf_processor.py  # extrae texto/imagenes, detecta imagenes y trocea
-├── embeddings.py     # genera vectores (auto / text / multimodal)
-├── vector_search.py  # $vectorSearch en Atlas
-├── memory.py         # Agent Engine Memory (recordar conversaciones)
-├── chat.py           # orquesta el pipeline y llama a DeepSeek
-└── static/           # UI (HTML/CSS/JS)
-```
-
-## Notas sobre el código
-
-- **Seguridad:** ninguna credencial está en el código. Todo vive en `.env`
-  (ignorado por git); se versiona únicamente `.env.example`.
-- **Memoria persistente:** el navegador guarda un `thread_id` en
-  `localStorage`. Ese id se usa como `session_id` en Agent Engine Memory,
-  de modo que al volver, el chat recupera el contexto de sesiones previas
-  mediante `build_context`.
-- **Dos modelos de embedding:** los PDFs de solo texto se indexan con
-  `voyage-context-4`; los PDFs con imágenes con `voyage-multimodal-3.5`.
-  La app detecta automáticamente cuál usar al subir cada documento.
+## Pruebas
+`pytest -q` (sin red). Checklist manual:
+1. Arrancar → pestaña Configuración → Estado muestra índices.
+2. `auto_embed` con chunk 600/100 sobre `PDFs/FAQS.pdf` → más chunks que con 1000/200; en `chunks_auto` no hay campo `embedding`.
+3. Cambiar modelo autoEmbed → aparece un índice `idx_auto_<modelo>` (BUILDING → READY).
+4. `voyage_context` → sliders deshabilitados; subir un `.md`.
+5. Seleccionar la carpeta `PDFs/` → se indexan los 4 PDFs.
+6. Analizar 2 repos relacionados → nodos Repository/Library/Endpoint/Function y `DEPENDS_ON` entre ellos.
+7. Preguntar en modo `vector`, `graph` e `hybrid` y comparar el panel de flujo; clic en un nodo del grafo lo expande.
+8. Reiniciar → los ajustes persisten; las API keys de la UI no.

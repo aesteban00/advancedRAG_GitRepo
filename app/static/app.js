@@ -53,7 +53,7 @@ function renderDocuments() {
   }
   for (const d of items) {
     const li = document.createElement("li");
-    li.textContent = `${d.filename} · ${d.chunks} chunks · subido por ${d.owner}`;
+    li.textContent = `${d.source} · ${d.chunks} chunks · subido por ${d.owner}`;
     list.appendChild(li);
   }
 }
@@ -121,30 +121,6 @@ function addMessage(role, text, memory = null, documents = null) {
   box.scrollTop = box.scrollHeight; // auto-scroll hacia abajo
   return div;
 }
-
-// --- Subida de PDF ---
-document.getElementById("upload-form").addEventListener("submit", async (e) => {
-  e.preventDefault();
-  const input = document.getElementById("pdf-input");
-  const status = document.getElementById("upload-status");
-  if (!input.files.length) return;
-
-  const formData = new FormData();
-  formData.append("file", input.files[0]);
-  formData.append("user_id", currentUser());
-  formData.append("visibility", visibility);
-
-  status.textContent = "Procesando PDF...";
-  try {
-    const res = await fetch("/upload", { method: "POST", body: formData });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.detail || res.statusText);
-    status.textContent = data.message + ` (${data.chunks} chunks · modo: ${data.mode} · ${visibility === "public" ? "público" : "privado"})`;
-    loadDocuments();
-  } catch (err) {
-    status.textContent = "Error: " + err.message;
-  }
-});
 
 // --- Boton de Memoria (ON/OFF) ---
 const memoryToggle = document.getElementById("memory-toggle");
@@ -363,6 +339,7 @@ async function showFlow(flowId, bubble) {
     flow.steps.forEach(updateStep);
     showOrigin(flow.memory, flow.documents);
     showTokens(flow.tokens, flow.steps);
+    renderGraph(flow.graph);
   } catch (err) {
     resetFlow();
     document.getElementById("flow-summary").textContent = "Error: " + err.message;
@@ -377,6 +354,7 @@ function handleEvent(ev) {
     addMessage("assistant", ev.reply, ev.memory, ev.documents);
     showOrigin(ev.memory, ev.documents);
     showTokens(ev.tokens, Object.values(stepsSeen));
+    renderGraph(ev.graph);
     if (ev.flow_id && userBubble) {
       attachFlow(userBubble, ev.flow_id);
       userBubble.classList.add("selected");
@@ -392,38 +370,179 @@ loadDocuments();
 openThread(currentThread());
 
 
-// --- Ajustes del LLM (solo en memoria del servidor; NO se guardan en el navegador) ---
-async function loadLLMConfig() {
-  try {
-    const cfg = await (await fetch("/llm-config")).json();
-    document.getElementById("llm-base-url").value = cfg.base_url;
-    document.getElementById("llm-model").value = cfg.model;
-    // Asteriscos = ya hay una LLM_API_KEY introducida (nunca se muestra su valor).
-    document.getElementById("llm-api-key").placeholder = cfg.has_key ? "********" : "(sin clave)";
-    // PIPELINE (panel izquierdo): LLM en uso.
-    let host = cfg.base_url;
-    try { host = new URL(cfg.base_url).host; } catch (e) {}
-    document.getElementById("pipeline-llm").innerHTML =
-      `LLM: ${cfg.model}<br />${host}<br />LLM_API_KEY: ${cfg.has_key ? "********" : "no definida"}`;
-  } catch (err) {}
+
+// ====================== Pestanas (Chat / Configuracion) ======================
+function showView(name) {
+  document.getElementById("view-chat").hidden = name !== "chat";
+  document.getElementById("view-config").hidden = name !== "config";
+  document.querySelectorAll(".main-tabs button").forEach((b) => b.classList.toggle("active", b.dataset.view === name));
+  localStorage.setItem("view", name);
+  if (name === "config") loadStatus();
 }
-document.getElementById("llm-form").addEventListener("submit", async (e) => {
-  e.preventDefault();
-  const keyInput = document.getElementById("llm-api-key");
-  const status = document.getElementById("llm-status");
-  // La clave solo se envia si se ha escrito; vacia = se mantiene la actual.
+document.querySelectorAll(".main-tabs button").forEach((b) => b.addEventListener("click", () => showView(b.dataset.view)));
+
+// ====================== Configuracion ======================
+let cfg = null;
+const $ = (id) => document.getElementById(id);
+const radio = (name) => document.querySelector(`input[name=${name}]:checked`).value;
+async function apiJson(url, opts) {
+  const res = await fetch(url, opts);
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.detail || res.statusText);
+  return data;
+}
+
+function fillEmbeddingSelect() {
+  const s = radio("strategy");
+  const sel = $("emb-model");
+  sel.replaceChildren();
+  for (const m of cfg.options.embedding_models[s]) sel.add(new Option(m, m));
+  sel.value = cfg.embedding[s];
+  $("emb-strategy-name").textContent = s;
+  $("emb-help").textContent = s === "auto_embed"
+    ? "autoEmbed: Atlas genera los vectores; cambiar de modelo crea un índice nuevo y Atlas re-embebe solo."
+    : "Los vectores los genera la app con la API de Voyage AI.";
+}
+
+function updateChunkControls() {
+  const auto = radio("strategy") === "auto_embed";
+  const [lo, hi] = cfg.options.chunk_size_range;
+  const size = $("chunk-size"), ov = $("chunk-overlap");
+  size.min = lo; size.max = hi;
+  size.disabled = ov.disabled = !auto;
+  if (!auto) {
+    const [fs, fo] = cfg.options.fixed_chunk;
+    size.value = fs; ov.value = fo;
+    $("chunk-help").textContent = "Tamaño y solape fijos para esta estrategia.";
+  } else {
+    $("chunk-help").textContent = "Elige tamaño y solape (solo con chunking manual + autoEmbed).";
+  }
+  ov.max = Math.floor(Number(size.value) / 2) - 1;
+  if (Number(ov.value) > Number(ov.max)) ov.value = ov.max;
+  $("chunk-size-val").textContent = size.value;
+  $("chunk-overlap-val").textContent = ov.value;
+}
+
+function renderPipelineNote() {
+  const s = cfg.ingest.strategy;
+  const same = cfg.llm.same_for_all;
+  $("pipeline-note").innerHTML =
+    `Ingesta: ${s}<br />Embedding: ${cfg.embedding[s]}<br />` +
+    `LLM chat: ${cfg.llm.chat.model}<br />LLM grafo: ${same ? "(el mismo)" : cfg.llm.graph.model}<br />` +
+    `Recuperación: ${cfg.retrieval.mode}<br />$vectorSearch + $rerank + $graphLookup`;
+}
+
+function applyLlmVisibility() {
+  const same = $("llm-same").checked;
+  $("llm-graph").hidden = same;
+  $("llm-chat-title").textContent = same ? "LLM (grafo + chat)" : "LLM de chat";
+}
+
+function fillConfigForm() {
+  document.querySelector(`input[name=strategy][value=${cfg.ingest.strategy}]`).checked = true;
+  document.querySelector(`input[name=mode][value=${cfg.retrieval.mode}]`).checked = true;
+  $("chunk-size").value = cfg.ingest.chunk_size;
+  $("chunk-overlap").value = cfg.ingest.chunk_overlap;
+  $("build-graph").checked = cfg.ingest.build_graph;
+  $("top-k").value = cfg.retrieval.top_k;
+  $("graph-depth").value = cfg.retrieval.graph_depth;
+  $("llm-same").checked = cfg.llm.same_for_all;
+  for (const r of ["chat", "graph"]) {
+    $(r + "-base-url").value = cfg.llm[r].base_url;
+    $(r + "-model").value = cfg.llm[r].model;
+    $(r + "-api-key").placeholder = cfg.llm[r].has_key ? "******** (configurada)" : "(sin clave)";
+  }
+  fillEmbeddingSelect(); updateChunkControls(); applyLlmVisibility(); renderPipelineNote();
+}
+
+async function loadSettings() {
+  try { cfg = await apiJson("/settings"); fillConfigForm(); } catch (err) { $("settings-status").textContent = "Error: " + err.message; }
+}
+
+document.querySelectorAll("input[name=strategy]").forEach((r) => r.addEventListener("change", () => {
+  if (radio("strategy") === "auto_embed") { $("chunk-size").value = cfg.ingest.chunk_size; $("chunk-overlap").value = cfg.ingest.chunk_overlap; }
+  fillEmbeddingSelect(); updateChunkControls();
+}));
+$("chunk-size").addEventListener("input", updateChunkControls);
+$("chunk-overlap").addEventListener("input", updateChunkControls);
+$("llm-same").addEventListener("change", applyLlmVisibility);
+
+$("save-settings").addEventListener("click", async () => {
+  const s = radio("strategy");
   const body = {
-    base_url: document.getElementById("llm-base-url").value,
-    api_key: keyInput.value,
-    model: document.getElementById("llm-model").value,
+    ingest: { strategy: s, build_graph: $("build-graph").checked },
+    embedding: { [s]: $("emb-model").value },
+    llm: { same_for_all: $("llm-same").checked,
+           chat: { base_url: $("chat-base-url").value.trim(), model: $("chat-model").value.trim() },
+           graph: { base_url: $("graph-base-url").value.trim(), model: $("graph-model").value.trim() } },
+    retrieval: { mode: radio("mode"), top_k: Number($("top-k").value), graph_depth: Number($("graph-depth").value) },
+    llm_keys: { chat: $("chat-api-key").value, graph: $("graph-api-key").value },
   };
-  const res = await fetch("/llm-config", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  keyInput.value = ""; // no dejamos la clave en el DOM
-  status.textContent = res.ok ? "Aplicado (solo en memoria)." : "Error al aplicar.";
-  loadLLMConfig();
+  if (s === "auto_embed") { body.ingest.chunk_size = Number($("chunk-size").value); body.ingest.chunk_overlap = Number($("chunk-overlap").value); }
+  try {
+    cfg = await apiJson("/settings", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    $("chat-api-key").value = $("graph-api-key").value = ""; // la clave no se queda en el DOM
+    fillConfigForm(); loadStatus();
+    $("settings-status").textContent = "Guardado ✓";
+  } catch (err) { $("settings-status").textContent = "Error: " + err.message; }
 });
-loadLLMConfig();
+
+// ---- Fuentes: ficheros, carpeta y repos ----
+function logIngest(data) {
+  const log = $("ingest-log");
+  const add = (cls, txt) => { const li = document.createElement("li"); li.className = cls; li.textContent = txt; log.appendChild(li); };
+  for (const r of data.results) {
+    add("ok", r.repo
+      ? `${r.repo} · ${r.entities} entidades · ${r.docs} docs · ${r.chunks} chunks`
+      : `${r.source} · ${r.strategy}/${r.model} · ${r.chunks} chunks · ${r.entities} entidades`);
+    (r.warnings || []).forEach((w) => add("warn", "⚠ " + w));
+  }
+  (data.skipped || []).forEach((f) => add("skip", "ignorado: " + f));
+  (data.errors || []).forEach((e) => add("error", `${e.file}: ${e.error}`));
+}
+async function runIngest(btn, url, opts) {
+  const log = $("ingest-log");
+  log.replaceChildren();
+  const li = document.createElement("li");
+  li.textContent = "Procesando… (puede tardar: el LLM extrae el grafo)";
+  log.appendChild(li);
+  document.querySelectorAll("#view-config button").forEach((b) => (b.disabled = true));
+  try { const data = await apiJson(url, opts); log.replaceChildren(); logIngest(data); }
+  catch (err) { log.replaceChildren(); logIngest({ results: [], errors: [{ file: "", error: err.message }] }); }
+  document.querySelectorAll("#view-config button").forEach((b) => (b.disabled = false));
+  loadDocuments(); loadStatus(); loadOverviewGraph();
+}
+$("ingest-files").addEventListener("click", () => {
+  const fd = new FormData();
+  const files = [...$("files-input").files, ...$("folder-input").files];
+  if (!files.length) return;
+  // webkitRelativePath: el navegador sube todos los ficheros de la carpeta.
+  files.forEach((f) => fd.append("files", f, f.webkitRelativePath || f.name));
+  fd.append("user_id", currentUser()); fd.append("visibility", visibility);
+  runIngest($("ingest-files"), "/ingest/files", { method: "POST", body: fd });
+});
+$("ingest-github").addEventListener("click", () => {
+  const urls = $("repo-urls").value.split("\n").map((u) => u.trim()).filter(Boolean);
+  if (!urls.length) return;
+  runIngest($("ingest-github"), "/ingest/github", { method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ urls, user_id: currentUser(), visibility }) });
+});
+
+// ---- Estado de Atlas ----
+async function loadStatus() {
+  const t = $("status-table");
+  t.replaceChildren();
+  const row = (cells, head) => { const tr = t.insertRow(); cells.forEach((c) => { const td = document.createElement(head ? "th" : "td"); td.textContent = c; tr.appendChild(td); }); };
+  try {
+    const st = await apiJson("/status");
+    row(["Colección", "Índice", "Tipo", "Estado", "Consultable"], true);
+    st.indexes.forEach((i) => row([i.collection, i.name, i.type, i.status, i.queryable ? "✓" : "✗"]));
+    row(["Recuentos", "", "", "", ""], true);
+    Object.entries(st.counts).forEach(([k, v]) => row([k, v, "", "", ""]));
+    if (st.error) row(["Error", st.error, "", "", ""]);
+  } catch (err) { row(["Error", err.message, "", "", ""]); }
+}
+$("refresh-status").addEventListener("click", loadStatus);
+
+loadSettings();
+showView(localStorage.getItem("view") || "chat");
