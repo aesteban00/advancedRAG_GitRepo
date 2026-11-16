@@ -62,7 +62,9 @@ async function loadDocuments() {
   try {
     const res = await fetch("/documents?user_id=" + encodeURIComponent(currentUser()));
     docs = await res.json();
+    if (!res.ok) throw new Error(docs.detail || res.statusText);
   } catch (err) {
+    console.error("loadDocuments:", err);
     docs = { public: [], private: [] };
   }
   renderDocuments();
@@ -174,7 +176,7 @@ document.getElementById("chat-form").addEventListener("submit", async (e) => {
         use_memory: useMemory, // envia el estado del toggle
       }),
     });
-    if (!res.ok) throw new Error(res.statusText);
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).detail || res.statusText);
 
     // El servidor envia una linea JSON por evento: la leemos segun llega.
     const reader = res.body.getReader();

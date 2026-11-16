@@ -39,21 +39,114 @@ Cada entidad es un documento `{_id, type, attributes, relationships:{target_ids,
 
 De cada repo de GitHub se extrae, sin LLM: descripción, librerías y versiones (requirements, pyproject, package.json, go.mod, pom.xml), BBDD/servicios, endpoints (FastAPI/Flask/Express/Spring), propietario (CODEOWNERS), ficheros/clases/funciones Python con sus llamadas, y relaciones entre repos (librería interna o endpoint consumido). README y `docs/*.md` pasan por la ingesta normal.
 
-## Requisitos
-- Python 3.11+
-- Cluster Atlas con Vector Search y Automated Embedding; `$rerank` requiere MongoDB 9.0+ y M10+ con Native Reranking (si no, `RERANK_ENABLED = False` en `app/config.py`)
-- Claves: LLM compatible OpenAI, Voyage AI, `MONGODB_URI`; opcional `GITHUB_TOKEN` (60 → 5000 peticiones/h) y Agent Engine Memory
+## Requisitos previos
+1. Python 3.11 o superior (lo exige el SDK de Agent Engine Memory).
+2. Cluster **MongoDB Atlas** con Vector Search y Automated Embedding (M10+ recomendado). `$rerank` requiere **MongoDB 9.0+**, **Native Reranking** activado en Project Settings y, para `rerank-3`, M10+. Si tu cluster no lo cumple, pon `RERANK_ENABLED = False` en `app/config.py`.
+3. API key de **Voyage AI** (solo para las estrategias manuales `voyage_context` y `voyage_multimodal`).
+4. API key de un **LLM compatible con OpenAI** (por defecto DeepSeek).
+5. Opcional: `GITHUB_TOKEN` (sube el límite de la API de GitHub de 60 a 5000 peticiones/h) y acceso a **Agent Engine Memory** (ver más abajo).
 
-## Ejecución
+## Instalación y ejecución
 ```bash
-python -m venv .venv && source .venv/bin/activate
+git clone <repo-url> && cd advancedRAG_GitRepo
+python3.11 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-cp .env.example .env      # rellena credenciales
-uvicorn app.main:app --reload
+cp .env.example .env        # rellena las credenciales
+uvicorn app.main:app --reload --port 8090
 ```
-Abre http://127.0.0.1:8000. Los índices se crean en código al arrancar (logs `[setup]`).
+Abre http://localhost:8090. Al arrancar se crean **en código** las colecciones y los índices (logs `[setup]`).
 
-Preguntas de ejemplo: "¿Qué librerías y versiones usa owner/repo?", "¿Qué repos usan MongoDB?", "¿Qué endpoints expone X?", "¿Qué se ve afectado si cambia Y?".
+| Índice | Colección | Tipo |
+|---|---|---|
+| `idx_auto_<modelo>` (p. ej. `idx_auto_voyage-4`) | `chunks_auto` | `autoEmbed` sobre `text` |
+| `idx_vector_context` | `chunks_context` | `vector`, 1024 dims, cosine |
+| `idx_vector_multimodal` | `chunks_multimodal` | `vector`, 1024 dims, cosine |
+| `type` y `relationships.target_ids` | `knowledge_graph` | índices normales (el segundo, multikey, resuelve aristas entrantes) |
+
+Todos los de búsqueda llevan además campos `filter` (`metadata.visibility`, `metadata.owner`, `metadata.model`). Un índice `autoEmbed` no se puede editar: al cambiar de modelo se crea uno nuevo.
+
+## Variables de entorno (`.env`)
+Solo **credenciales**. Colecciones, índices y re-ranking están fijos en `app/config.py`; estrategia, modelos y LLMs se eligen en la pestaña Configuración.
+
+| Variable | Descripción |
+|---|---|
+| `DEEPSEEK_API_KEY` | API key del LLM (editable en caliente desde Configuración, solo en memoria) |
+| `DEEPSEEK_BASE_URL` / `DEEPSEEK_MODEL` | (opcionales) URL base y modelo del LLM por defecto |
+| `VOYAGE_API_KEY` | API key de Voyage AI (estrategias manuales) |
+| `MONGODB_URI` | Cadena de conexión a Atlas |
+| `GITHUB_TOKEN` | (opcional) token de solo lectura para la API de GitHub |
+| `AGENTIC_MEMORY_PROJECT_ID` | Project id de Agent Engine Memory |
+| `AGENTIC_MEMORY_CLIENT_ID` / `AGENTIC_MEMORY_CLIENT_SECRET` | Credenciales del service account de memoria |
+| `AGENTIC_MEMORY_BASE_URL` | (opcional) backend local de memoria |
+
+## Memoria (Atlas Agent Engine Memory)
+La memoria de las conversaciones la gestiona **Agent Engine Memory** y se guarda en el **mismo cluster** que los documentos. Es opcional: sin ella (o si falla, p. ej. `AGENT_NOT_DEPLOYED`) el chat sigue funcionando y el paso de memoria aparece en rojo en el panel de flujo. Requiere una organización Atlas-backed.
+
+```bash
+# 0) CLI instalado y autenticado
+agentengine auth login
+
+# 1) Proyecto de memoria (genera project-config.yaml con el bloque memory:)
+agentengine create --memory-only --name "Mi Proyecto"
+
+# 2) Context apuntando al proyecto Atlas-backed
+agentengine context create mi-memoria \
+  --org-id <org-id> --project-id <project-id> \
+  --base-url https://agentengine.mongodb.com
+
+# 3) Secrets de proyecto (Consola > Secrets > Add Secrets, o por CLI)
+#    MONGODB_URI = mismo cluster que los documentos; MONGODB_DATABASE = graphrag_demo
+agentengine secret set MONGODB_URI --project-scope
+agentengine secret set VOYAGE_API_KEY --project-scope
+agentengine secret set LLM_API_KEY --project-scope
+agentengine secret set MONGODB_DATABASE --project-scope
+
+# 4) Aplicar la configuración de memoria (desde la carpeta de project-config.yaml)
+agentengine memory configure --context mi-memoria
+agentengine memory apply --wait --context mi-memoria
+
+# 5) Permitir las IPs del data plane en el cluster
+agentengine atlas profile save --context mi-memoria
+agentengine atlas setup-ip-access --context mi-memoria
+
+# 6) Crear y desplegar el workspace (sin esto: AGENT_NOT_DEPLOYED / NO_WORKSPACE_ENDPOINT)
+agentengine init && agentengine deploy
+
+# 7) Service account (devuelve client id y secret)
+agentengine service-account create memory-service --context mi-memoria --role PROJECT_OWNER
+```
+Y en el `.env`: `AGENTIC_MEMORY_PROJECT_ID`, `AGENTIC_MEMORY_CLIENT_ID`, `AGENTIC_MEMORY_CLIENT_SECRET`.
+
+> - El service account con rol `PROJECT_OWNER`/`PROJECT_READ_ONLY` exige el *Atlas service account pairing* en el proyecto.
+> - Los cambios en Secrets se aplican en el siguiente despliegue o al forzar una sincronización.
+> - La app canjea el client id/secret por un token y lo renueva sola; la organización nunca va en el `.env`.
+> - Si la sesión de la CLI caduca (`session expired`), repite `agentengine auth login`.
+
+## Estructura del proyecto
+```
+app/
+├── main.py            # FastAPI: chat, ajustes, ingesta, estado y grafo
+├── config.py          # credenciales (.env) y constantes fijas
+├── settings.py        # ajustes editables desde la UI (se guardan en MongoDB, sin secretos)
+├── db.py              # MongoClient compartido
+├── setup_indexes.py   # colecciones e índices en código
+├── loaders.py         # pdf/md/txt -> páginas -> chunks
+├── embeddings.py      # Voyage manual (context / multimodal)
+├── ingest.py          # ingesta de un documento según la estrategia + grafo
+├── github_ingest.py   # repos de GitHub -> grafo determinista + docs
+├── graph_store.py     # GraphRAG: MongoDBGraphStore + $graphLookup
+├── graph_view.py      # NetworkX -> JSON para el visor
+├── vector_search.py   # $vectorSearch + $rerank
+├── memory.py          # Agent Engine Memory
+├── chat.py            # memoria + vector + grafo + LLM
+├── flow_store.py      # flujo de cada petición e historial
+└── static/            # UI (index.html, app.js, graph.js, style.css)
+tests/                 # pytest sin red
+```
+
+## Notas
+- **Seguridad:** ninguna credencial está en el código; todo vive en `.env` (ignorado por git) y solo se versiona `.env.example`. Las API keys introducidas en la UI viven solo en la memoria del proceso.
+- **Memoria persistente:** el navegador guarda un `thread_id` en `localStorage`, que se usa como `session_id` en Agent Engine Memory.
 
 ## Limitaciones (a propósito)
 Sin MCP ni Databricks, sin autenticación/roles, sin actualización automática de repos, AST solo para Python (otros lenguajes: endpoints por regex), ingesta síncrona, sin streaming de tokens.
