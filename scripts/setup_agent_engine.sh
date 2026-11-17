@@ -27,6 +27,15 @@ AUTH_HEADER="${CHAT_LLM_AUTH_HEADER:-authorization}"
 for v in MONGODB_URI VOYAGE_API_KEY CHAT_LLM_BASE_URL CHAT_LLM_MODEL AGENTIC_MEMORY_PROJECT_ID AGENTENGINE_ORG_ID; do
   [ -n "${!v:-}" ] || { echo "Falta $v en el .env"; exit 1; }
 done
+case "$CHAT_LLM_BASE_URL" in
+  *ai-gateway.corp.mongodb.com*)
+    echo "ERROR: ai-gateway.corp.mongodb.com NO es alcanzable desde Agent Engine (restriccion de red conocida,"
+    echo "       afecta tambien a la memoria). Usa el gateway Grove publico, con una clave Grove NUEVA:"
+    echo "         CHAT_LLM_BASE_URL=https://grove-gateway-prod.azure-api.net/grove-foundry-prod/openai/v1"
+    echo "         CHAT_LLM_AUTH_HEADER=api-key"
+    echo "       (o la API publica de un proveedor: https://api.openai.com/v1 con CHAT_LLM_AUTH_HEADER=authorization)."
+    exit 1 ;;
+esac
 [ -n "$LLM_KEY" ] || { echo "Falta LLM_API_KEY (o CHAT_LLM_API_KEY) en el .env"; exit 1; }
 
 run() { echo "+ $*"; [ -n "${DRY_RUN:-}" ] || "$@"; }
