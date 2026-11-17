@@ -44,7 +44,7 @@ else
       --base-url https://agentengine.mongodb.com
 fi
 
-echo "== 2/5 Agente con memoria (genera project-config.yaml con tu LLM)"
+echo "== 2/5 Agente con memoria (carpeta agent-engine/, se crea aqui)"
 if [ ! -d agent-engine ]; then
   LLM_API_KEY="$LLM_KEY" VOYAGE_API_KEY="$VOYAGE_API_KEY" run agentengine create --name graphrag-memory --memory \
     --llm openai-compatible --llm-base-url "$CHAT_LLM_BASE_URL" --llm-model "$CHAT_LLM_MODEL" \
@@ -52,6 +52,13 @@ if [ ! -d agent-engine ]; then
 else
   echo "La carpeta agent-engine/ ya existe: se reutiliza."
 fi
+
+# project-config.yaml (raiz) es la fuente de verdad: se copia al agente rellenando los marcadores con el .env
+if [ -z "${DRY_RUN:-}" ]; then
+  sed -e "s|__CHAT_LLM_BASE_URL__|$CHAT_LLM_BASE_URL|" -e "s|__CHAT_LLM_MODEL__|$CHAT_LLM_MODEL|" \
+      -e "s|__CHAT_LLM_AUTH_HEADER__|$AUTH_HEADER|" project-config.yaml > agent-engine/project-config.yaml
+fi
+echo "+ project-config.yaml (raiz) -> agent-engine/project-config.yaml"
 
 echo "== 3/5 Secrets de proyecto (la memoria corre en Agent Engine y no ve tu .env)"
 secret MONGODB_URI "$MONGODB_URI"

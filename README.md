@@ -73,7 +73,7 @@ Al terminar, crea el service account (el secret se muestra una sola vez) y copia
 ```bash
 agentengine service-account create memory-service --context graphrag --role PROJECT_OWNER
 ```
-`DRY_RUN=1 ./scripts/setup_agent_engine.sh` solo muestra los pasos sin ejecutarlos. Si falla con `session expired`, repite `agentengine auth login`. Crear un workspace exige una organización de Agent Engine **Atlas-backed**.
+El script crea la carpeta `agent-engine/` (local, ignorada por git) y le copia el `project-config.yaml` de la raíz, rellenando el LLM de extracción con tu `.env`. Ese fichero define la configuración de la memoria (modelo de embeddings, LLM de extracción, cuándo y qué extraer) y trae alternativas comentadas: edítalo antes de ejecutar el script. `DRY_RUN=1 ./scripts/setup_agent_engine.sh` solo muestra los pasos sin ejecutarlos. Si falla con `session expired`, repite `agentengine auth login`. Crear un workspace exige una organización de Agent Engine **Atlas-backed**.
 
 ## 3. Arrancar
 ```bash
@@ -105,6 +105,7 @@ Abre http://localhost:8090. Al arrancar se crean **en código** colecciones e í
 ```
 app/       main, config, settings, db, setup_indexes, loaders, embeddings, ingest,
            github_ingest, graph_store, graph_view, vector_search, memory, chat, flow_store, static/
+project-config.yaml        # configuración de la memoria (con alternativas comentadas)
 scripts/   setup_agent_engine.sh   # memoria en Agent Engine desde el .env
 tests/     pytest sin red
 ```
