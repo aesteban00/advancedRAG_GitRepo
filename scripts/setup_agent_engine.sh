@@ -40,26 +40,46 @@ secret() {  # sube un secret de proyecto leyendo el valor por stdin (no queda en
 }
 
 echo "== 1/5 Context (organizacion + proyecto de Agent Engine)"
-if row=$(agentengine context list 2>/dev/null | awk -v c="$CTX" '$1==c'); [ -n "$row" ]; then
-  # El context debe apuntar EXACTAMENTE a la org y proyecto del .env (evita desplegar en otro sitio).
-  read -r _ _ ctx_org ctx_proj <<<"$row"
-  if [ "$ctx_org" != "$AGENTENGINE_ORG_ID" ] || [ "$ctx_proj" != "$AGENTIC_MEMORY_PROJECT_ID" ]; then
-    echo "ERROR: el context '$CTX' apunta a org=$ctx_org proyecto=$ctx_proj,"
-    echo "       pero tu .env dice org=$AGENTENGINE_ORG_ID proyecto=$AGENTIC_MEMORY_PROJECT_ID."
-    echo "       Cambia AGENTENGINE_CONTEXT en el .env (nombre nuevo) o corrige los ids."
-    exit 1
-  fi
-  echo "El context '$CTX' ya existe y coincide con el .env."
-else
+create_ctx() {
   run agentengine context create "$CTX" --org-id "$AGENTENGINE_ORG_ID" \
       --project-id "$AGENTIC_MEMORY_PROJECT_ID" --base-url https://agentengine.mongodb.com
+}
+if row=$(agentengine context list 2>/dev/null | awk -v c="$CTX" '$1==c'); [ -n "$row" ]; then
+  read -r _ _ ctx_org ctx_proj <<<"$row"
+  if [ "$ctx_org" != "$AGENTENGINE_ORG_ID" ] || [ "$ctx_proj" != "$AGENTIC_MEMORY_PROJECT_ID" ]; then
+    # Un context no se puede reapuntar: hay que borrarlo y recrearlo (solo afecta a esta maquina).
+    echo "ADVERTENCIA: el context '$CTX' apunta a org=$ctx_org proyecto=$ctx_proj,"
+    echo "             pero tu .env dice org=$AGENTENGINE_ORG_ID proyecto=$AGENTIC_MEMORY_PROJECT_ID."
+    echo "Para continuar se va a:"
+    echo "  - borrar el context local '$CTX' (agentengine context delete; no toca nada en Agent Engine)"
+    echo "  - borrar la carpeta local agent-engine/ (agente generado, pin y registro del workspace)"
+    echo "  - recrear ambos con los valores de tu .env"
+    read -r -p "¿Continuar? [y/N] " ans
+    [ "$ans" = "y" ] || { echo "Cancelado. Corrige el .env o usa otro AGENTENGINE_CONTEXT."; exit 1; }
+    run agentengine context delete "$CTX" --yes
+    run rm -rf agent-engine
+    create_ctx
+  else
+    echo "El context '$CTX' ya existe y coincide con el .env."
+  fi
+else
+  create_ctx
 fi
 
 echo "== 2/5 Agente con memoria (carpeta agent-engine/, se crea aqui)"
-if [ ! -d agent-engine ]; then
+TARGET="$AGENTENGINE_ORG_ID $AGENTIC_MEMORY_PROJECT_ID"
+if [ -d agent-engine ] && [ "$(cat agent-engine/.target 2>/dev/null)" != "$TARGET" ]; then
+  # La carpeta se genero para otra org/proyecto (o con una version antigua del script): hay que recrearla.
+  echo "ADVERTENCIA: agent-engine/ no corresponde a la org/proyecto de tu .env."
+  read -r -p "¿Borrar agent-engine/ y recrearla? [y/N] " ans
+  [ "$ans" = "y" ] || { echo "Cancelado."; exit 1; }
+  run rm -rf agent-engine
+fi
+if [ ! -d agent-engine ] || [ -n "${DRY_RUN:-}" ]; then
   LLM_API_KEY="$LLM_KEY" VOYAGE_API_KEY="$VOYAGE_API_KEY" run agentengine create --name graphrag-memory --memory \
     --llm openai-compatible --llm-base-url "$CHAT_LLM_BASE_URL" --llm-model "$CHAT_LLM_MODEL" \
     --llm-auth-header "$AUTH_HEADER" --dir agent-engine --yes
+  [ -n "${DRY_RUN:-}" ] || echo "$TARGET" > agent-engine/.target
 else
   echo "La carpeta agent-engine/ ya existe: se reutiliza."
 fi
