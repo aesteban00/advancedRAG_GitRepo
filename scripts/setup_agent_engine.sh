@@ -19,24 +19,24 @@ cd "$(dirname "$0")/.."
 set -a; source .env; set +a
 command -v agentengine >/dev/null || { echo "Instala la CLI 'agentengine' primero."; exit 1; }
 
-# --- valores del .env (los de CHAT_LLM_* son los mismos que usa la app) ---
+# --- valores del .env (la memoria usa su PROPIO LLM, MEMORY_LLM_*, independiente del de chat CHAT_LLM_*) ---
 CTX="${AGENTENGINE_CONTEXT:-graphrag}"
 DB="${MONGODB_DATABASE:-graphrag_demo}"
-LLM_KEY="${LLM_API_KEY:-${CHAT_LLM_API_KEY:-}}"
-AUTH_HEADER="${CHAT_LLM_AUTH_HEADER:-authorization}"
-for v in MONGODB_URI VOYAGE_API_KEY CHAT_LLM_BASE_URL CHAT_LLM_MODEL AGENTIC_MEMORY_PROJECT_ID AGENTENGINE_ORG_ID; do
+LLM_KEY="${MEMORY_LLM_API_KEY:-}"
+AUTH_HEADER="${MEMORY_LLM_AUTH_HEADER:-authorization}"
+for v in MONGODB_URI VOYAGE_API_KEY MEMORY_LLM_BASE_URL MEMORY_LLM_MODEL AGENTIC_MEMORY_PROJECT_ID AGENTENGINE_ORG_ID; do
   [ -n "${!v:-}" ] || { echo "Falta $v en el .env"; exit 1; }
 done
-case "$CHAT_LLM_BASE_URL" in
+case "$MEMORY_LLM_BASE_URL" in
   *ai-gateway.corp.mongodb.com*)
     echo "ERROR: ai-gateway.corp.mongodb.com NO es alcanzable desde Agent Engine (restriccion de red conocida,"
     echo "       afecta tambien a la memoria). Usa el gateway Grove publico, con una clave Grove NUEVA:"
-    echo "         CHAT_LLM_BASE_URL=https://grove-gateway-prod.azure-api.net/grove-foundry-prod/openai/v1"
-    echo "         CHAT_LLM_AUTH_HEADER=api-key"
-    echo "       (o la API publica de un proveedor: https://api.openai.com/v1 con CHAT_LLM_AUTH_HEADER=authorization)."
+    echo "         MEMORY_LLM_BASE_URL=https://grove-gateway-prod.azure-api.net/grove-foundry-prod/openai/v1"
+    echo "         MEMORY_LLM_AUTH_HEADER=api-key"
+    echo "       (o la API publica de un proveedor: https://api.openai.com/v1 con MEMORY_LLM_AUTH_HEADER=authorization)."
     exit 1 ;;
 esac
-[ -n "$LLM_KEY" ] || { echo "Falta LLM_API_KEY (o CHAT_LLM_API_KEY) en el .env"; exit 1; }
+[ -n "$LLM_KEY" ] || { echo "Falta MEMORY_LLM_API_KEY en el .env"; exit 1; }
 
 run() { echo "+ $*"; [ -n "${DRY_RUN:-}" ] || "$@"; }
 secret() {  # sube un secret de proyecto leyendo el valor por stdin (no queda en el historial)
@@ -86,7 +86,7 @@ if [ -d agent-engine ] && [ "$(cat agent-engine/.target 2>/dev/null)" != "$TARGE
 fi
 if [ ! -d agent-engine ] || [ -n "${DRY_RUN:-}" ]; then
   LLM_API_KEY="$LLM_KEY" VOYAGE_API_KEY="$VOYAGE_API_KEY" run agentengine create --name graphrag-memory --memory \
-    --llm openai-compatible --llm-base-url "$CHAT_LLM_BASE_URL" --llm-model "$CHAT_LLM_MODEL" \
+    --llm openai-compatible --llm-base-url "$MEMORY_LLM_BASE_URL" --llm-model "$MEMORY_LLM_MODEL" \
     --llm-auth-header "$AUTH_HEADER" --dir agent-engine --yes
   [ -n "${DRY_RUN:-}" ] || echo "$TARGET" > agent-engine/.target
 else
@@ -95,8 +95,8 @@ fi
 
 # project-config.yaml (raiz) es la fuente de verdad: se copia al agente rellenando los marcadores con el .env
 if [ -z "${DRY_RUN:-}" ]; then
-  sed -e "s|__CHAT_LLM_BASE_URL__|$CHAT_LLM_BASE_URL|" -e "s|__CHAT_LLM_MODEL__|$CHAT_LLM_MODEL|" \
-      -e "s|__CHAT_LLM_AUTH_HEADER__|$AUTH_HEADER|" project-config.yaml > agent-engine/project-config.yaml
+  sed -e "s|__MEMORY_LLM_BASE_URL__|$MEMORY_LLM_BASE_URL|" -e "s|__MEMORY_LLM_MODEL__|$MEMORY_LLM_MODEL|" \
+      -e "s|__MEMORY_LLM_AUTH_HEADER__|$AUTH_HEADER|" project-config.yaml > agent-engine/project-config.yaml
 fi
 echo "+ project-config.yaml (raiz) -> agent-engine/project-config.yaml"
 

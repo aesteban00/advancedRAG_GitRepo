@@ -73,7 +73,7 @@ Al terminar, crea el service account (el secret se muestra una sola vez) y copia
 ```bash
 agentengine service-account create memory-service --context graphrag --role PROJECT_OWNER
 ```
-El script crea la carpeta `agent-engine/` (local, ignorada por git) y le copia el `project-config.yaml` de la raíz, rellenando el LLM de extracción con tu `.env`. Ese fichero define la configuración de la memoria (modelo de embeddings, LLM de extracción, cuándo y qué extraer) y trae alternativas comentadas: edítalo antes de ejecutar el script. `DRY_RUN=1 ./scripts/setup_agent_engine.sh` solo muestra los pasos sin ejecutarlos. Si el context `graphrag` ya existe con otra organización o proyecto, el script lo advierte y, con solo contestar `y`, borra el context local y la carpeta `agent-engine/` y los recrea con los valores de tu `.env` (no se toca nada en Agent Engine). Si falla con `session expired`, repite `agentengine auth login`. **LLM de extracción:** debe ser alcanzable desde Agent Engine (corre en AWS). `ai-gateway.corp.mongodb.com` no lo es (restricción de red conocida; el script lo detecta y aborta). Usa el gateway Grove público (`https://grove-gateway-prod.azure-api.net/grove-foundry-prod/openai/v1`, `CHAT_LLM_AUTH_HEADER=api-key`, clave Grove nueva) o la API pública de un proveedor (`https://api.openai.com/v1`, `authorization`). Crear un workspace exige una organización de Agent Engine **Atlas-backed**.
+El script crea la carpeta `agent-engine/` (local, ignorada por git) y le copia el `project-config.yaml` de la raíz, rellenando el LLM de extracción con tu `.env`. Ese fichero define la configuración de la memoria (modelo de embeddings, LLM de extracción, cuándo y qué extraer) y trae alternativas comentadas: edítalo antes de ejecutar el script. `DRY_RUN=1 ./scripts/setup_agent_engine.sh` solo muestra los pasos sin ejecutarlos. Si el context `graphrag` ya existe con otra organización o proyecto, el script lo advierte y, con solo contestar `y`, borra el context local y la carpeta `agent-engine/` y los recrea con los valores de tu `.env` (no se toca nada en Agent Engine). Si falla con `session expired`, repite `agentengine auth login`. **LLM de extracción (`MEMORY_LLM_*`, separado del de chat `CHAT_LLM_*`):** debe ser alcanzable desde Agent Engine (corre en AWS). `ai-gateway.corp.mongodb.com` no lo es (restricción de red conocida; el script lo detecta y aborta). Usa el gateway Grove público (`https://grove-gateway-prod.azure-api.net/grove-foundry-prod/openai/v1`, `MEMORY_LLM_AUTH_HEADER=api-key`, clave Grove nueva) o la API pública de un proveedor (`https://api.openai.com/v1`, `authorization`). Crear un workspace exige una organización de Agent Engine **Atlas-backed**.
 
 ## 3. Arrancar
 ```bash
@@ -91,13 +91,12 @@ Abre http://localhost:8090. Al arrancar se crean **en código** colecciones e í
 | Variable | Para qué sirve |
 |---|---|
 | `CHAT_LLM_API_KEY` / `CHAT_LLM_BASE_URL` / `CHAT_LLM_MODEL` | Modelo de chat por defecto (cualquier proveedor compatible con OpenAI). Editable en la pestaña Configuración |
-| `CHAT_LLM_AUTH_HEADER` | Cabecera de la API key (`authorization` o `api-key`); solo la usa el script de memoria |
 | `VOYAGE_API_KEY` | Embeddings de las estrategias manuales y de la memoria |
 | `MONGODB_URI` | Conexión a Atlas (la app y la memoria usan el mismo cluster) |
 | `GITHUB_TOKEN` | (Opcional) sube el límite de GitHub de 60 a 5000 peticiones/h |
 | `AGENTIC_MEMORY_PROJECT_ID` | Proyecto de Agent Engine donde vive la memoria |
 | `AGENTIC_MEMORY_CLIENT_ID` / `AGENTIC_MEMORY_CLIENT_SECRET` | Service account que la app usa para hablar con la memoria |
-| `LLM_API_KEY` | Solo para el script: LLM que extrae los recuerdos (si está vacía, se usa `CHAT_LLM_API_KEY`) |
+| `MEMORY_LLM_BASE_URL` / `MEMORY_LLM_MODEL` / `MEMORY_LLM_AUTH_HEADER` / `MEMORY_LLM_API_KEY` | Solo para el script: **LLM de extracción de la memoria**, independiente del modelo de chat. Debe ser alcanzable desde Agent Engine (ver arriba). La clave se sube como secret `LLM_API_KEY` |
 | `MONGODB_DATABASE` | Solo para el script: base de datos de la memoria (`graphrag_demo`) |
 | `AGENTENGINE_ORG_ID` | Solo para el script, **obligatorio**: id de tu organización de Agent Engine. Con `AGENTIC_MEMORY_PROJECT_ID` fija dónde se despliega; el script aborta si el context existente apunta a otra org/proyecto |
 | `AGENTENGINE_CONTEXT` | Solo para el script: nombre del context de la CLI (por defecto `graphrag`) |

@@ -4,7 +4,7 @@
 #  No contiene claves: solo referencias a secrets de proyecto.
 #
 #  Los marcadores __X__ los rellena el script con tu .env:
-#    __CHAT_LLM_BASE_URL__  __CHAT_LLM_MODEL__  __CHAT_LLM_AUTH_HEADER__
+#    __MEMORY_LLM_BASE_URL__  __MEMORY_LLM_MODEL__  __MEMORY_LLM_AUTH_HEADER__
 #  (si aplicas este fichero a mano, sustituyelos por valores reales).
 # ============================================================
 memory:
@@ -26,10 +26,10 @@ memory:
   #   Azure/gateway: base_url <tu-gateway>/openai/v1         auth_header api-key
   extraction_llm:
     provider: openai
-    model: __CHAT_LLM_MODEL__
-    base_url: __CHAT_LLM_BASE_URL__
+    model: __MEMORY_LLM_MODEL__
+    base_url: __MEMORY_LLM_BASE_URL__
     api_key_secret: LLM_API_KEY
-    auth_header: __CHAT_LLM_AUTH_HEADER__
+    auth_header: __MEMORY_LLM_AUTH_HEADER__
 
   # Cuando se extrae: tras max_messages mensajes o stale_minutes de inactividad.
   background_extraction:
