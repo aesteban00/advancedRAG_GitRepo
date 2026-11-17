@@ -168,11 +168,19 @@ async function selectNode(id) {
   S.selected = id; render();
   await showDetail(id);
 }
-// Salta a un nodo relacionado: si no esta en pantalla, expande el actual para traerlo.
+// Navega a un nodo relacionado: lo trae al grafo si falta, muestra su tipo si estaba filtrado,
+// expande su vecindario (para poder seguir navegando) y centra la vista en el.
 async function goTo(id) {
+  if (S.path) { S.path = null; S.pathEdges = new Set(); }          // salir del modo "camino"
   if (!S.nodes.has(id) && S.selected) await expandNode(S.selected);
   if (!S.nodes.has(id)) await expandNode(id).catch(() => {});
-  await selectNode(id);
+  const n = S.nodes.get(id);
+  if (n) S.hiddenTypes.delete(n.type);                              // que no quede oculto por un filtro
+  if (!S.expanded.has(id)) await expandNode(id).catch(() => {});
+  S.selected = id; render();
+  const m = S.nodes.get(id);
+  if (m) { view.x = 500 - m.px * view.k; view.y = 350 - m.py * view.k; applyView(); }   // centrar
+  await showDetail(id);
 }
 async function showDetail(id) {
   const box = $g("gv-detail");
