@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>GraphRAG · MongoDB Atlas</title>
-  <link rel="stylesheet" href="/static/style.css?v=25" />
+  <link rel="stylesheet" href="/static/style.css?v=26" />
 </head>
 <body>
   <!-- Barra superior (estilo consola Atlas) -->
@@ -171,18 +171,20 @@
             <ul id="ingest-log" class="ingest-log"></ul>
           </section>
 
-          <section class="card">
-            <h2>5. Estado de MongoDB Atlas</h2>
+          <section class="card status-card">
+            <div class="status-head">
+              <h2>5. Estado de MongoDB Atlas</h2>
+              <button type="button" id="refresh-status" class="btn">Refrescar</button>
+            </div>
             <p class="status">Todo vive en el mismo cluster: chunks, vectores, grafo, memoria y ajustes.</p>
-            <button type="button" id="refresh-status" class="btn">Refrescar</button>
-            <table id="status-table" class="status-table"></table>
+            <div id="status-box"></div>
           </section>
         </div>
       </section>
     </main>
   </div>
 
-  <script src="/static/graph.js?v=25"></script>
-  <script src="/static/app.js?v=25"></script>
+  <script src="/static/graph.js?v=26"></script>
+  <script src="/static/app.js?v=26"></script>
 </body>
 </html>

@@ -534,17 +534,32 @@ $("ingest-github").addEventListener("click", () => {
 
 // ---- Estado de Atlas ----
 async function loadStatus() {
-  const t = $("status-table");
-  t.replaceChildren();
-  const row = (cells, head) => { const tr = t.insertRow(); cells.forEach((c) => { const td = document.createElement(head ? "th" : "td"); td.textContent = c; tr.appendChild(td); }); };
+  const box = $("status-box");
+  const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; };
+  box.replaceChildren();
   try {
     const st = await apiJson("/status");
-    row(["Colección", "Índice", "Tipo", "Estado", "Consultable"], true);
-    st.indexes.forEach((i) => row([i.collection, i.name, i.type, i.status, i.queryable ? "✓" : "✗"]));
-    row(["Recuentos", "", "", "", ""], true);
-    Object.entries(st.counts).forEach(([k, v]) => row([k, v, "", "", ""]));
-    if (st.error) row(["Error", st.error, "", "", ""]);
-  } catch (err) { row(["Error", err.message, "", "", ""]); }
+    // Indices de busqueda
+    box.appendChild(el("h3", "", "Índices de búsqueda"));
+    if (st.indexes.length) {
+      const t = el("table", "status-table"); const head = t.createTHead().insertRow();
+      ["Colección", "Índice", "Tipo", "Estado", "Consultable"].forEach((c) => head.appendChild(el("th", "", c)));
+      const body = t.createTBody();
+      for (const i of st.indexes) {
+        const r = body.insertRow();
+        r.appendChild(el("td", "", i.collection)); r.appendChild(el("td", "mono", i.name)); r.appendChild(el("td", "", i.type));
+        const td = el("td"); td.appendChild(el("span", "pill " + (i.status === "READY" ? "ok" : "wait"), i.status || "?")); r.appendChild(td);
+        r.appendChild(el("td", i.queryable ? "yes" : "no", i.queryable ? "✓" : "✗"));
+      }
+      box.appendChild(t);
+    } else box.appendChild(el("p", "status", "Sin índices (¿falló la creación al arrancar? Revisa los logs [setup])."));
+    // Recuentos
+    box.appendChild(el("h3", "", "Contenido"));
+    const tiles = el("div", "tiles");
+    for (const [k, v] of Object.entries(st.counts)) { const t = el("div", "tile"); t.appendChild(el("b", "", String(v))); t.appendChild(el("span", "", k)); tiles.appendChild(t); }
+    box.appendChild(tiles);
+    if (st.error) box.appendChild(el("p", "warn", "Error: " + st.error));
+  } catch (err) { box.appendChild(el("p", "warn", "Error: " + err.message)); }
 }
 $("refresh-status").addEventListener("click", loadStatus);
 

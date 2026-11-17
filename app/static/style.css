@@ -307,7 +307,10 @@ button.toggle[data-visibility="private"] { background: #fff4d6; border-color: #f
 .view { display: flex; gap: 24px; align-items: flex-start; flex: 1; min-width: 0; }
 .view[hidden] { display: none; }
 #view-config { flex-direction: column; }
-.config-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(380px, 1fr)); gap: 16px; width: 100%; }
+/* Columnas tipo "masonry": las tarjetas se apilan sin dejar huecos en blanco */
+.config-grid { columns: 2 420px; column-gap: 16px; width: 100%; }
+.config-grid .card { break-inside: avoid; margin-bottom: 16px; }
+.config-grid .status-card { column-span: all; }
 .fld, .chk { display: flex; font-size: 0.85rem; margin: 8px 0; }
 .fld { flex-direction: column; gap: 4px; }
 .chk { gap: 8px; align-items: center; }
@@ -316,8 +319,6 @@ input[type=range]:disabled { opacity: 0.4; }
 .ingest-log { list-style: none; padding: 0; font-size: 0.8rem; }
 .ingest-log .warn { background: none; border: 0; color: #6b4a00; padding: 0; margin: 0; }
 .ingest-log .error { color: #db3030; } .ingest-log .skip { color: var(--muted); } .ingest-log .ok { color: var(--green-dark); }
-.status-table { width: 100%; font-size: 0.78rem; border-collapse: collapse; margin-top: 8px; }
-.status-table th, .status-table td { text-align: left; padding: 3px 6px; border-bottom: 1px solid var(--border); }
 .flow-top { flex: 1; overflow: auto; min-height: 0; }
 .graph-panel { height: 45vh; display: flex; flex-direction: column; border-top: 1px solid var(--border); padding-top: 8px; }
 .graph-head { display: flex; gap: 6px; align-items: center; }
@@ -349,3 +350,19 @@ input[type=range]:disabled { opacity: 0.4; }
 .graph-legend { display: inline-flex; flex-wrap: wrap; gap: 4px 12px; }
 .legend-item { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; }
 .legend-item i { display: inline-block; width: 9px; height: 9px; border-radius: 50%; }
+
+/* ---- Estado de MongoDB Atlas ---- */
+.status-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 4px; }
+.status-head h2 { margin: 0; }
+.status-card .status { margin: 4px 0 12px; }
+.status-card h3 { margin: 14px 0 6px; font-size: 0.78rem; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+.status-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+.status-table th { text-align: left; padding: 6px 10px; font-weight: 600; color: var(--muted); border-bottom: 2px solid var(--border); }
+.status-table td { padding: 7px 10px; border-bottom: 1px solid var(--border); }
+.status-table .mono { font-family: ui-monospace, Menlo, monospace; font-size: 0.78rem; }
+.status-table .yes { color: var(--green-dark); font-weight: 700; } .status-table .no { color: #db3030; font-weight: 700; }
+.pill { display: inline-block; padding: 1px 10px; border-radius: 999px; font-size: 0.72rem; font-weight: 600; }
+.pill.ok { background: #e3fcf7; color: var(--green-dark); } .pill.wait { background: #fff4d6; color: #6b4a00; }
+.tiles { display: flex; flex-wrap: wrap; gap: 10px; }
+.tile { flex: 1 1 140px; background: #f9fbfa; border: 1px solid var(--border); border-radius: 12px; padding: 10px 14px; display: flex; flex-direction: column; }
+.tile b { font-size: 1.35rem; font-weight: 600; } .tile span { font-size: 0.74rem; color: var(--muted); }
