@@ -24,7 +24,7 @@ CTX="${AGENTENGINE_CONTEXT:-graphrag}"
 DB="${MONGODB_DATABASE:-graphrag_demo}"
 LLM_KEY="${LLM_API_KEY:-${CHAT_LLM_API_KEY:-}}"
 AUTH_HEADER="${CHAT_LLM_AUTH_HEADER:-authorization}"
-for v in MONGODB_URI VOYAGE_API_KEY CHAT_LLM_BASE_URL CHAT_LLM_MODEL AGENTIC_MEMORY_PROJECT_ID; do
+for v in MONGODB_URI VOYAGE_API_KEY CHAT_LLM_BASE_URL CHAT_LLM_MODEL AGENTIC_MEMORY_PROJECT_ID AGENTENGINE_ORG_ID; do
   [ -n "${!v:-}" ] || { echo "Falta $v en el .env"; exit 1; }
 done
 [ -n "$LLM_KEY" ] || { echo "Falta LLM_API_KEY (o CHAT_LLM_API_KEY) en el .env"; exit 1; }
@@ -40,12 +40,19 @@ secret() {  # sube un secret de proyecto leyendo el valor por stdin (no queda en
 }
 
 echo "== 1/5 Context (organizacion + proyecto de Agent Engine)"
-if agentengine context list 2>/dev/null | awk '{print $1}' | grep -qx "$CTX"; then
-  echo "El context '$CTX' ya existe."
+if row=$(agentengine context list 2>/dev/null | awk -v c="$CTX" '$1==c'); [ -n "$row" ]; then
+  # El context debe apuntar EXACTAMENTE a la org y proyecto del .env (evita desplegar en otro sitio).
+  read -r _ _ ctx_org ctx_proj <<<"$row"
+  if [ "$ctx_org" != "$AGENTENGINE_ORG_ID" ] || [ "$ctx_proj" != "$AGENTIC_MEMORY_PROJECT_ID" ]; then
+    echo "ERROR: el context '$CTX' apunta a org=$ctx_org proyecto=$ctx_proj,"
+    echo "       pero tu .env dice org=$AGENTENGINE_ORG_ID proyecto=$AGENTIC_MEMORY_PROJECT_ID."
+    echo "       Cambia AGENTENGINE_CONTEXT en el .env (nombre nuevo) o corrige los ids."
+    exit 1
+  fi
+  echo "El context '$CTX' ya existe y coincide con el .env."
 else
-  ORG=(); [ -n "${AGENTENGINE_ORG_ID:-}" ] && ORG=(--org-id "$AGENTENGINE_ORG_ID")
-  run agentengine context create "$CTX" "${ORG[@]}" --project-id "$AGENTIC_MEMORY_PROJECT_ID" \
-      --base-url https://agentengine.mongodb.com
+  run agentengine context create "$CTX" --org-id "$AGENTENGINE_ORG_ID" \
+      --project-id "$AGENTIC_MEMORY_PROJECT_ID" --base-url https://agentengine.mongodb.com
 fi
 
 echo "== 2/5 Agente con memoria (carpeta agent-engine/, se crea aqui)"

@@ -99,7 +99,8 @@ Abre http://localhost:8090. Al arrancar se crean **en código** colecciones e í
 | `AGENTIC_MEMORY_CLIENT_ID` / `AGENTIC_MEMORY_CLIENT_SECRET` | Service account que la app usa para hablar con la memoria |
 | `LLM_API_KEY` | Solo para el script: LLM que extrae los recuerdos (si está vacía, se usa `CHAT_LLM_API_KEY`) |
 | `MONGODB_DATABASE` | Solo para el script: base de datos de la memoria (`graphrag_demo`) |
-| `AGENTENGINE_CONTEXT` / `AGENTENGINE_ORG_ID` | Solo para el script: nombre del context (por defecto `graphrag`) y tu organización (opcional) |
+| `AGENTENGINE_ORG_ID` | Solo para el script, **obligatorio**: id de tu organización de Agent Engine. Con `AGENTIC_MEMORY_PROJECT_ID` fija dónde se despliega; el script aborta si el context existente apunta a otra org/proyecto |
+| `AGENTENGINE_CONTEXT` | Solo para el script: nombre del context de la CLI (por defecto `graphrag`) |
 
 ## Estructura
 ```
