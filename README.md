@@ -78,6 +78,8 @@ Solo **credenciales**. Colecciones, índices y re-ranking están fijos en `app/c
 | `AGENTIC_MEMORY_PROJECT_ID` | Project id de Agent Engine Memory |
 | `AGENTIC_MEMORY_CLIENT_ID` / `AGENTIC_MEMORY_CLIENT_SECRET` | Credenciales del service account de memoria |
 | `AGENTIC_MEMORY_BASE_URL` | (opcional) backend local de memoria |
+| `LLM_API_KEY` | **Solo para crear secrets de Agent Engine** (la app no la lee): clave del LLM de extracción de memoria (`extraction_llm` en `project-config.yaml`) |
+| `MONGODB_DATABASE` | **Solo para crear secrets de Agent Engine**: base de datos donde escribe la memoria; usa `graphrag_demo` |
 
 ## Memoria (Atlas Agent Engine Memory)
 La memoria de las conversaciones la gestiona **Agent Engine Memory** y se guarda en el **mismo cluster** que los documentos. Es opcional: sin ella (o si falla, p. ej. `AGENT_NOT_DEPLOYED`) el chat sigue funcionando y el paso de memoria aparece en rojo en el panel de flujo. Requiere una organización Atlas-backed.
@@ -94,14 +96,14 @@ agentengine context create mi-memoria \
   --org-id <org-id> --project-id <project-id> \
   --base-url https://agentengine.mongodb.com
 
-# 3) Secrets de proyecto (Consola > Secrets > Add Secrets, o por CLI)
-#    MONGODB_URI = mismo cluster que los documentos; MONGODB_DATABASE = graphrag_demo
+# 3) Secrets de proyecto (Consola > Secrets > Add Secrets, o por CLI).
+#    Cada secret se rellena con una variable de tu .env (ver tabla de abajo).
 agentengine secret set MONGODB_URI --project-scope
 agentengine secret set VOYAGE_API_KEY --project-scope
 agentengine secret set LLM_API_KEY --project-scope
 agentengine secret set MONGODB_DATABASE --project-scope
 
-# 4) Aplicar la configuración de memoria (desde la carpeta de project-config.yaml)
+# 4) Aplicar la configuración de memoria (usa el project-config.yaml de la raíz del repo)
 agentengine memory configure --context mi-memoria
 agentengine memory apply --wait --context mi-memoria
 
@@ -116,6 +118,36 @@ agentengine init && agentengine deploy
 agentengine service-account create memory-service --context mi-memoria --role PROJECT_OWNER
 ```
 Y en el `.env`: `AGENTIC_MEMORY_PROJECT_ID`, `AGENTIC_MEMORY_CLIENT_ID`, `AGENTIC_MEMORY_CLIENT_SECRET`.
+
+### `project-config.yaml` (en la raíz del repo)
+
+Es **necesario** para `agentengine memory configure/apply`: define el modelo de embeddings de la memoria (`voyage`) y el LLM de extracción (`extraction_llm`: `base_url`, `model`, `auth_header` y el nombre del secret `LLM_API_KEY`). No contiene claves, solo referencias a secrets. Ajusta `base_url` y `auth_header` al LLM al que pertenezca tu `LLM_API_KEY`. Ejecuta los comandos `agentengine` desde la raíz del repo para que lo encuentre.
+
+### Qué valor va en cada secret de Agent Engine
+
+El servidor de memoria corre **dentro de Agent Engine**, no en tu máquina, así que no ve tu `.env`: hay que subirle sus propios secrets de proyecto. Los valores salen de tu `.env`:
+
+| Secret de Agent Engine | Sale de la variable | Para qué lo usa la memoria |
+|---|---|---|
+| `MONGODB_URI` | `MONGODB_URI` | Conectar al **mismo cluster** que los documentos y escribir ahí sus colecciones de memoria |
+| `MONGODB_DATABASE` | `MONGODB_DATABASE` (`graphrag_demo`) | Base de datos en la que guarda la memoria, junto a `chunks_*` y `knowledge_graph` |
+| `VOYAGE_API_KEY` | `VOYAGE_API_KEY` | Generar los embeddings de los recuerdos (modelo `voyage` de `project-config.yaml`) |
+| `LLM_API_KEY` | `LLM_API_KEY` | Extraer en segundo plano los recuerdos (semánticos, episódicos…) con el `extraction_llm`; debe corresponder a su `base_url` y `auth_header` |
+
+Y qué hace cada variable de la app al hablar con la memoria:
+
+| Variable de la app | Qué es |
+|---|---|
+| `AGENTIC_MEMORY_PROJECT_ID` | Proyecto de Agent Engine donde vive la memoria (la organización va implícita en el token) |
+| `AGENTIC_MEMORY_CLIENT_ID` / `AGENTIC_MEMORY_CLIENT_SECRET` | Service account que la app canjea por un token (se renueva solo) |
+
+`LLM_API_KEY` y `MONGODB_DATABASE` solo se usan para crear los secrets; la app no los lee. Ejemplo para subirlos sin escribirlos a mano:
+```bash
+set -a; source .env; set +a
+printf %s "$LLM_API_KEY"       | agentengine secret set LLM_API_KEY --project-scope --context mi-memoria
+printf %s "$MONGODB_DATABASE"  | agentengine secret set MONGODB_DATABASE --project-scope --context mi-memoria
+```
+(Revisa con `agentengine secret set --help` si tu versión admite leer el valor por stdin; si no, usa la consola: Secrets > Add Secrets.)
 
 > - El service account con rol `PROJECT_OWNER`/`PROJECT_READ_ONLY` exige el *Atlas service account pairing* en el proyecto.
 > - Los cambios en Secrets se aplican en el siguiente despliegue o al forzar una sincronización.
