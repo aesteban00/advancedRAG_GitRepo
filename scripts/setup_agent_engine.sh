@@ -100,7 +100,11 @@ secret LLM_API_KEY "$LLM_KEY"
 echo "== 4/5 Aplicar la configuracion de memoria"
 ( cd agent-engine 2>/dev/null || true
   run agentengine memory configure --context "$CTX"
-  run agentengine memory apply --wait --context "$CTX" )
+  run agentengine memory apply --wait --context "$CTX" ) || {
+  echo; echo "La memoria no arranco. Estado e indicacion de la plataforma:"
+  agentengine memory status --context "$CTX" || true
+  exit 1
+}
 
 echo "== 5/5 Registrar y desplegar el workspace"
 ( cd agent-engine/agents/graphrag-memory 2>/dev/null || true
