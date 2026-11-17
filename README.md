@@ -35,7 +35,7 @@ Además: un modelo de **embedding**, un **LLM para construir el grafo** y otro *
 
 ## Qué verás en pantalla
 - **Chat**: la respuesta cita sus fuentes y el panel derecho muestra el flujo (memoria, `$vectorSearch`, grafo, LLM, tokens).
-- **Grafo**: visor grande (NetworkX calcula el layout; se dibuja en SVG) con zoom, arrastre y clic para expandir un nodo.
+- **Grafo**: visor navegable (NetworkX calcula el layout; se dibuja en SVG). Zoom y arrastre; **filtros** por tipo de nodo y de relación (el código —ficheros, clases, funciones— va oculto por defecto); **clic** = ficha de la entidad (atributos, fuentes, relaciones salientes y entrantes clicables); **doble clic** = expandir o colapsar su vecindario sin perder lo que ya ves; búsqueda con autocompletado y **camino más corto entre dos entidades** (`$graphLookup`), sin distinguir si vienen de repos o de documentos.
 - **Configuración**: modelos, ingesta, recuperación, fuentes y estado de los índices de Atlas.
 
 ## De un repo de GitHub se extrae (sin LLM)

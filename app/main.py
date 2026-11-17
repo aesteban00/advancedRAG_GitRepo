@@ -172,11 +172,42 @@ def status():
 
 
 @app.get("/graph")
-def graph(entity: str = "", depth: int = 2, type: str = "Repository"):
+def graph(entity: str = "", depth: int = 2, type: str = ""):
+    """Sin entity: resumen (entidades mas conectadas, o de un tipo). depth=0: solo vecinos directos."""
     try:
         if entity:
-            return graph_view.subgraph_layout(graph_store.neighborhood(entity, depth), [entity])
-        return graph_view.subgraph_layout(graph_store.overview(type))
+            ents = graph_store.direct_neighbors(entity) if depth <= 0 else graph_store.neighborhood(entity, depth)
+            return graph_view.subgraph_layout(ents, [entity])
+        return graph_view.subgraph_layout(graph_store.overview(type or None))
+    except Exception as exc:
+        raise _http_error(exc)
+
+
+@app.get("/graph/search")
+def graph_search(q: str = ""):
+    try:
+        return graph_store.search(q)
+    except Exception as exc:
+        raise _http_error(exc)
+
+
+@app.get("/graph/entity")
+def graph_entity(id: str):
+    try:
+        return graph_store.entity_detail(id)
+    except Exception as exc:
+        raise _http_error(exc)
+
+
+@app.get("/graph/path")
+def graph_path(source: str, target: str):
+    """Camino entre dos entidades, calculado con $graphLookup."""
+    try:
+        res = graph_store.find_path(source, target)
+        if not res["path"]:
+            return {"found": False, "path": [], "graph": {"nodes": [], "edges": []}}
+        g = graph_view.subgraph_layout(graph_store.path_entities(res["path"]), res["path"], max_nodes=len(res["path"]) + 1)
+        return {"found": True, **res, "graph": g}
     except Exception as exc:
         raise _http_error(exc)
 

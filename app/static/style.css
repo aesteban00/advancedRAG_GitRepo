@@ -329,9 +329,23 @@ input[type=range]:disabled { opacity: 0.4; }
 
 /* ---- Pestana Grafo (grande) ---- */
 .graph-full { width: 100%; }
-.graph-toolbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.graph-toolbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 6px; }
 .graph-toolbar h1 { margin: 0 auto 0 0; font-size: 1.4rem; }
 .graph-toolbar input { padding: 6px 8px; border: 1px solid #b8c4c2; border-radius: 6px; width: 240px; }
-#gv-svg { width: 100%; height: 72vh; background: #f9fbfa; border: 1px solid var(--border); border-radius: 12px; touch-action: none; }
-/* El panel pequeno necesita altura explicita para que el SVG se vea */
-#graph-svg { min-height: 220px; }
+.path-bar input { width: 260px; }
+.graph-body { display: flex; gap: 12px; align-items: stretch; }
+#gv-svg { flex: 1; min-width: 0; height: 68vh; background: #f9fbfa; border: 1px solid var(--border); border-radius: 12px; touch-action: none; }
+.graph-detail { width: 330px; height: 68vh; overflow: auto; background: #fff; border: 1px solid var(--border); border-radius: 12px; padding: 14px; font-size: 0.82rem; }
+.graph-detail[hidden] { display: none; }
+.graph-detail h3 { margin: 0 0 8px; font-size: 0.95rem; word-break: break-word; }
+.graph-detail h4 { margin: 12px 0 4px; font-size: 0.8rem; color: var(--muted); text-transform: uppercase; }
+.graph-detail .badge { margin-left: 8px; padding: 1px 8px; border-radius: 999px; color: #fff; font-size: 0.7rem; font-weight: 500; }
+.graph-detail dl { margin: 0; } .graph-detail dt { font-weight: 600; } .graph-detail dd { margin: 0 0 6px; word-break: break-word; }
+.graph-detail ul { margin: 0; padding-left: 16px; } .graph-detail ul.rels { list-style: none; padding: 0; }
+.graph-detail ul.rels li { padding: 2px 0; word-break: break-word; } .graph-detail a { color: var(--green-dark); text-decoration: none; }
+.graph-detail a:hover { text-decoration: underline; }
+.detail-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.legend-row { margin-top: 6px; font-size: 0.78rem; }
+.graph-legend { display: inline-flex; flex-wrap: wrap; gap: 4px 12px; }
+.legend-item { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; }
+.legend-item i { display: inline-block; width: 9px; height: 9px; border-radius: 50%; }

@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>GraphRAG · MongoDB Atlas</title>
-  <link rel="stylesheet" href="/static/style.css?v=23" />
+  <link rel="stylesheet" href="/static/style.css?v=24" />
 </head>
 <body>
   <!-- Barra superior (estilo consola Atlas) -->
@@ -81,16 +81,28 @@
         <div class="graph-full">
           <div class="graph-toolbar">
             <h1>Grafo de conocimiento</h1>
-            <button type="button" id="gv-overview" class="btn">Repos</button>
+            <button type="button" id="gv-overview" class="btn">Resumen</button>
             <button type="button" id="gv-last" class="btn">Último del chat</button>
-            <input type="text" id="gv-entity" placeholder="entidad (_id) + Enter" />
+            <input type="text" id="gv-entity" list="gv-datalist" placeholder="buscar entidad + Enter" />
             <button type="button" id="gv-out" class="btn">−</button>
             <button type="button" id="gv-reset" class="btn">100%</button>
             <button type="button" id="gv-in" class="btn">+</button>
           </div>
-          <p class="status">Rueda del ratón = zoom · arrastrar el fondo = mover · clic en un nodo = expandir su vecindario.</p>
-          <svg id="gv-svg" viewBox="0 0 1000 700" preserveAspectRatio="xMidYMid meet"></svg>
-          <div id="gv-legend" class="graph-legend"></div>
+          <div class="graph-toolbar path-bar">
+            <b>Camino:</b>
+            <input type="text" id="gv-from" list="gv-datalist" placeholder="desde (entidad)" />
+            <span>→</span>
+            <input type="text" id="gv-to" list="gv-datalist" placeholder="hasta (entidad)" />
+            <button type="button" id="gv-path" class="btn primary">Buscar camino</button>
+          </div>
+          <datalist id="gv-datalist"></datalist>
+          <p class="status">Rueda = zoom · arrastrar el fondo = mover · clic = detalle · doble clic = expandir/colapsar · casillas = filtrar por tipo o relación.</p>
+          <div class="graph-body">
+            <svg id="gv-svg" viewBox="0 0 1000 700" preserveAspectRatio="xMidYMid meet"></svg>
+            <aside id="gv-detail" class="graph-detail" hidden></aside>
+          </div>
+          <div class="legend-row"><b>Tipos:</b> <span id="gv-legend" class="graph-legend"></span></div>
+          <div class="legend-row"><b>Relaciones:</b> <span id="gv-rel-legend" class="graph-legend"></span></div>
           <p id="gv-info" class="status"></p>
         </div>
       </section>
@@ -170,7 +182,7 @@
     </main>
   </div>
 
-  <script src="/static/graph.js?v=23"></script>
-  <script src="/static/app.js?v=23"></script>
+  <script src="/static/graph.js?v=24"></script>
+  <script src="/static/app.js?v=24"></script>
 </body>
 </html>

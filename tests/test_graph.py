@@ -18,3 +18,11 @@ def test_layout():
     assert {n["id"] for n in g["nodes"]} == {"a/b", "lib", "x", "z"}
     assert all(0 <= n["x"] <= 1 and 0 <= n["y"] <= 1 for n in g["nodes"])
     assert next(n for n in g["nodes"] if n["id"] == "a/b")["highlight"]
+
+
+def test_bfs_camino_mas_corto():
+    adj = {"a": ["b", "c"], "b": ["d"], "c": ["d", "e"], "d": [], "e": ["f"]}
+    assert graph_store._bfs(adj, "a", "d") in (["a", "b", "d"], ["a", "c", "d"])
+    assert graph_store._bfs(adj, "a", "f") == ["a", "c", "e", "f"]
+    assert graph_store._bfs(adj, "a", "a") == ["a"]
+    assert graph_store._bfs(adj, "d", "a") is None   # el grafo es dirigido
