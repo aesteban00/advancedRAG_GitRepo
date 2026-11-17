@@ -1,195 +1,115 @@
-# GraphRAG avanzado sobre documentos y repos de GitHub (MongoDB Atlas)
+# GraphRAG sobre documentos y repos de GitHub con MongoDB Atlas
 
-Proyecto **educacional** en Python: sube documentos (`.pdf`, `.md`, `.txt`) o analiza repositorios de GitHub y pregunta sobre ellos en un chat que combina **búsqueda vectorial** y **GraphRAG**, todo sobre **una sola plataforma: MongoDB Atlas**. Cada respuesta cita sus fuentes y muestra el subgrafo usado (NetworkX).
+Proyecto **educacional**: sube documentos o apunta a repositorios de GitHub y pregúntales en un chat. Todo vive en **una sola base de datos, MongoDB Atlas**.
 
-## Por qué MongoDB
+---
 
+# Parte 1 · Qué es y cómo funciona
+
+## La idea en 30 segundos
+Un RAG normal busca fragmentos de texto parecidos a tu pregunta. **GraphRAG** añade un segundo camino: un **grafo** de entidades (repositorios, librerías, endpoints, bases de datos, personas…) y de sus relaciones. Así puede responder cosas como *"¿qué repos usan MongoDB?"* o *"¿qué se ve afectado si cambia esta librería?"*, que la búsqueda por texto no resuelve bien.
+
+```
+Documentos / carpeta ─► troceado ─► vectores ─┐
+Repos de GitHub ─► grafo (librerías, endpoints, código) ─┼─► MongoDB Atlas ─► Chat con fuentes + grafo
+                                              (vectores + grafo + memoria + ajustes en el mismo cluster)
+```
+
+## Por qué MongoDB (el mensaje de la demo)
 | Ventaja | Dónde se ve |
 |---|---|
-| **Una sola base de conocimiento**: chunks, vectores, grafo, memoria, flujos y ajustes en el mismo cluster | BD `graphrag_demo` |
-| **Grafo nativo con `$graphLookup`**: un documento por entidad, recorrido dentro de la BD (sin cargar el grafo en memoria ni una base de grafos aparte) | `graph_store.py` |
-| **Automated Embedding (`autoEmbed`)**: Atlas genera y sincroniza los vectores con Voyage AI; la app solo inserta texto | estrategia `auto_embed` |
-| **Voyage AI y `$rerank` integrados** | estrategias manuales + `$rerank` |
-| **Esquema flexible**: repos, librerías, endpoints, funciones, documentos… en la misma colección | `knowledge_graph` |
-| **Respuestas con fuente**: cada chunk y cada entidad guardan su origen | prompt y citas |
+| **Una sola plataforma**: chunks, vectores, grafo, memoria y ajustes en el mismo cluster | BD `graphrag_demo` |
+| **Grafo nativo**: un documento por entidad y recorrido con `$graphLookup` dentro de la BD, sin base de grafos aparte | `app/graph_store.py` |
+| **Automated Embedding (`autoEmbed`)**: Atlas genera y sincroniza los vectores; la app solo guarda texto | estrategia `auto_embed` |
+| **Voyage AI y `$rerank` integrados** | estrategias manuales y búsqueda |
+| **Esquema flexible**: repos, librerías, endpoints, funciones… en la misma colección | `knowledge_graph` |
 
-## Arquitectura
+## Qué puedes elegir (pestaña Configuración)
+| Estrategia | Quién genera los vectores | Chunking |
+|---|---|---|
+| `auto_embed` | Atlas (`autoEmbed`) | **tú eliges tamaño y solape** |
+| `voyage_context` | la app con `voyage-context-4` | fijo |
+| `voyage_multimodal` | la app con `voyage-multimodal-3.5` (texto + imagen) | una página = un chunk |
 
-```
- ficheros / carpeta ─► loaders ─► chunking ─► ingest ─┬─► chunks_auto | chunks_context | chunks_multimodal
- URLs GitHub ─► github_ingest ─┬─ grafo determinista ─┼─► knowledge_graph  (+ LLM de grafo: MongoDBGraphStore)
-                               └─ README/docs ────────┘
- Chat ─► memoria (Agent Engine) ─► $vectorSearch + $rerank ─┐
-                               └─► entidades (LLM) + $graphLookup ─► LLM de chat ─► respuesta + subgrafo (NetworkX → SVG)
-```
+Además: un modelo de **embedding**, un **LLM para construir el grafo** y otro **para el chat** (por defecto, el mismo), tres modos de recuperación (`hybrid`, `vector`, `graph`) y tres fuentes: ficheros, carpeta o URLs de GitHub.
 
-## Estrategias de ingesta (pestaña Configuración)
+## Qué verás en pantalla
+- **Chat**: la respuesta cita sus fuentes y el panel derecho muestra el flujo (memoria, `$vectorSearch`, grafo, LLM, tokens).
+- **Grafo**: visor grande (NetworkX calcula el layout; se dibuja en SVG) con zoom, arrastre y clic para expandir un nodo.
+- **Configuración**: modelos, ingesta, recuperación, fuentes y estado de los índices de Atlas.
 
-| Estrategia | Vectores | Chunking | Colección | Índice |
-|---|---|---|---|---|
-| `auto_embed` | Atlas (`autoEmbed`) | **tamaño y solape elegibles** | `chunks_auto` | `idx_auto_<modelo>` |
-| `voyage_context` | app → `voyage-context-4` | fijo (1000/200) | `chunks_context` | `idx_vector_context` |
-| `voyage_multimodal` | app → `voyage-multimodal-3.5` | página = chunk | `chunks_multimodal` | `idx_vector_multimodal` |
+## De un repo de GitHub se extrae (sin LLM)
+Descripción, librerías y versiones, bases de datos y servicios, endpoints, propietario (CODEOWNERS), clases/funciones Python con sus llamadas y relaciones entre repos. El README y `docs/*.md` pasan por la ingesta normal.
 
-Se puede elegir un modelo de **embedding**, un **LLM para construir el grafo** y otro **para el chat** (por defecto el mismo, el del `.env`).
+## Limitaciones a propósito
+Sin MCP, sin autenticación/roles, sin actualización automática de repos, AST solo para Python, ingesta síncrona.
 
-## GraphRAG
+---
 
-Cada entidad es un documento `{_id, type, attributes, relationships:{target_ids, types, attributes}}` (formato de `MongoDBGraphStore`, [guía oficial](https://www.mongodb.com/docs/atlas/ai-integrations/langchain/graph-rag/)). La consulta extrae entidades de la pregunta con el LLM, recorre salientes con `$graphLookup` y entrantes con un índice multikey sobre `relationships.target_ids` ("¿quién usa X?").
+# Parte 2 · Puesta en marcha
 
-De cada repo de GitHub se extrae, sin LLM: descripción, librerías y versiones (requirements, pyproject, package.json, go.mod, pom.xml), BBDD/servicios, endpoints (FastAPI/Flask/Express/Spring), propietario (CODEOWNERS), ficheros/clases/funciones Python con sus llamadas, y relaciones entre repos (librería interna o endpoint consumido). README y `docs/*.md` pasan por la ingesta normal.
+## Requisitos
+- Python 3.11+
+- Cluster **MongoDB Atlas** con Vector Search y Automated Embedding (M10+ recomendado)
+- API key de **Voyage AI** y de un **LLM compatible con la API de OpenAI**
+- Opcional: `GITHUB_TOKEN` (más peticiones a la API de GitHub) y la CLI `agentengine` (memoria)
+- `$rerank` necesita MongoDB 9.0+ y M10+; si tu cluster no lo cumple, pon `RERANK_ENABLED = False` en `app/config.py`
 
-## Requisitos previos
-1. Python 3.11 o superior (lo exige el SDK de Agent Engine Memory).
-2. Cluster **MongoDB Atlas** con Vector Search y Automated Embedding (M10+ recomendado). `$rerank` requiere **MongoDB 9.0+**, **Native Reranking** activado en Project Settings y, para `rerank-3`, M10+. Si tu cluster no lo cumple, pon `RERANK_ENABLED = False` en `app/config.py`.
-3. API key de **Voyage AI** (solo para las estrategias manuales `voyage_context` y `voyage_multimodal`).
-4. API key de un **LLM compatible con OpenAI** (OpenAI, Azure OpenAI, un gateway corporativo, etc.).
-5. Opcional: `GITHUB_TOKEN` (sube el límite de la API de GitHub de 60 a 5000 peticiones/h) y acceso a **Agent Engine Memory** (ver más abajo).
-
-## Instalación y ejecución
+## 1. Instalar
 ```bash
 git clone <repo-url> && cd advancedRAG_GitRepo
 python3.11 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-cp .env.example .env        # rellena las credenciales
+cp .env.example .env     # y rellénalo (ver tabla)
+```
+
+## 2. (Opcional) Crear la memoria en Agent Engine
+La memoria permite que el chat recuerde conversaciones anteriores. Sin ella todo lo demás funciona.
+```bash
+agentengine auth login                  # abre el navegador
+./scripts/setup_agent_engine.sh         # crea contexto, agente y secrets desde tu .env y lo despliega
+```
+Al terminar, crea el service account (el secret se muestra una sola vez) y copia sus valores al `.env`:
+```bash
+agentengine service-account create memory-service --context graphrag --role PROJECT_OWNER
+```
+`DRY_RUN=1 ./scripts/setup_agent_engine.sh` solo muestra los pasos sin ejecutarlos. Si falla con `session expired`, repite `agentengine auth login`. Crear un workspace exige una organización de Agent Engine **Atlas-backed**.
+
+## 3. Arrancar
+```bash
 uvicorn app.main:app --reload --port 8090
 ```
-Abre http://localhost:8090. Al arrancar se crean **en código** las colecciones y los índices (logs `[setup]`).
+Abre http://localhost:8090. Al arrancar se crean **en código** colecciones e índices (logs `[setup]`).
 
-| Índice | Colección | Tipo |
-|---|---|---|
-| `idx_auto_<modelo>` (p. ej. `idx_auto_voyage-4`) | `chunks_auto` | `autoEmbed` sobre `text` |
-| `idx_vector_context` | `chunks_context` | `vector`, 1024 dims, cosine |
-| `idx_vector_multimodal` | `chunks_multimodal` | `vector`, 1024 dims, cosine |
-| `type` y `relationships.target_ids` | `knowledge_graph` | índices normales (el segundo, multikey, resuelve aristas entrantes) |
+## 4. Probar
+1. **Configuración** → elige estrategia y modelos → *Guardar configuración*.
+2. **Fuentes** → sube un `.pdf/.md/.txt`, una carpeta (p. ej. `PDFs/`) o pega URLs de GitHub.
+3. **Chat** → pregunta, p. ej. *"¿Qué librerías usa owner/repo?"*, *"¿Qué repos usan MongoDB?"*, *"¿Qué se ve afectado si cambia X?"*. Cambia el modo (`vector`, `graph`, `hybrid`) y compara el panel de flujo.
+4. **Grafo** → explora las relaciones con zoom.
 
-Todos los de búsqueda llevan además campos `filter` (`metadata.visibility`, `metadata.owner`, `metadata.model`). Un índice `autoEmbed` no se puede editar: al cambiar de modelo se crea uno nuevo.
-
-## Variables de entorno (`.env`)
-Solo **credenciales**. Colecciones, índices y re-ranking están fijos en `app/config.py`; estrategia, modelos y LLMs se eligen en la pestaña Configuración.
-
-| Variable | Descripción |
+## Variables del `.env`
+| Variable | Para qué sirve |
 |---|---|
-| `CHAT_LLM_API_KEY` | API key del modelo de chat (editable en caliente desde Configuración, solo en memoria) |
-| `CHAT_LLM_BASE_URL` / `CHAT_LLM_MODEL` | URL base y nombre del modelo de chat por defecto (cualquier proveedor compatible con la API de OpenAI) |
-| `VOYAGE_API_KEY` | API key de Voyage AI (estrategias manuales) |
-| `MONGODB_URI` | Cadena de conexión a Atlas |
-| `GITHUB_TOKEN` | (opcional) token de solo lectura para la API de GitHub |
-| `AGENTIC_MEMORY_PROJECT_ID` | Project id de Agent Engine Memory |
-| `AGENTIC_MEMORY_CLIENT_ID` / `AGENTIC_MEMORY_CLIENT_SECRET` | Credenciales del service account de memoria |
-| `AGENTIC_MEMORY_BASE_URL` | (opcional) backend local de memoria |
-| `LLM_API_KEY` | **Solo para crear secrets de Agent Engine** (la app no la lee): clave del LLM de extracción de memoria (`extraction_llm` en `project-config.yaml`) |
-| `MONGODB_DATABASE` | **Solo para crear secrets de Agent Engine**: base de datos donde escribe la memoria; usa `graphrag_demo` |
+| `CHAT_LLM_API_KEY` / `CHAT_LLM_BASE_URL` / `CHAT_LLM_MODEL` | Modelo de chat por defecto (cualquier proveedor compatible con OpenAI). Editable en la pestaña Configuración |
+| `CHAT_LLM_AUTH_HEADER` | Cabecera de la API key (`authorization` o `api-key`); solo la usa el script de memoria |
+| `VOYAGE_API_KEY` | Embeddings de las estrategias manuales y de la memoria |
+| `MONGODB_URI` | Conexión a Atlas (la app y la memoria usan el mismo cluster) |
+| `GITHUB_TOKEN` | (Opcional) sube el límite de GitHub de 60 a 5000 peticiones/h |
+| `AGENTIC_MEMORY_PROJECT_ID` | Proyecto de Agent Engine donde vive la memoria |
+| `AGENTIC_MEMORY_CLIENT_ID` / `AGENTIC_MEMORY_CLIENT_SECRET` | Service account que la app usa para hablar con la memoria |
+| `LLM_API_KEY` | Solo para el script: LLM que extrae los recuerdos (si está vacía, se usa `CHAT_LLM_API_KEY`) |
+| `MONGODB_DATABASE` | Solo para el script: base de datos de la memoria (`graphrag_demo`) |
+| `AGENTENGINE_CONTEXT` / `AGENTENGINE_ORG_ID` | Solo para el script: nombre del context (por defecto `graphrag`) y tu organización (opcional) |
 
-## Memoria (Atlas Agent Engine Memory)
-La memoria de las conversaciones la gestiona **Agent Engine Memory** y se guarda en el **mismo cluster** que los documentos. Es opcional: sin ella (o si falla, p. ej. `AGENT_NOT_DEPLOYED`) el chat sigue funcionando y el paso de memoria aparece en rojo en el panel de flujo. Requiere una organización Atlas-backed.
-
-```bash
-# 0) CLI instalado y autenticado
-agentengine auth login
-
-# 1) Proyecto de memoria (genera project-config.yaml con el bloque memory:)
-agentengine create --memory-only --name "Mi Proyecto"
-
-# 2) Context apuntando al proyecto Atlas-backed
-agentengine context create mi-memoria \
-  --org-id <org-id> --project-id <project-id> \
-  --base-url https://agentengine.mongodb.com
-
-# 3) Secrets de proyecto (Consola > Secrets > Add Secrets, o por CLI).
-#    Cada secret se rellena con una variable de tu .env (ver tabla de abajo).
-agentengine secret set MONGODB_URI --project-scope
-agentengine secret set VOYAGE_API_KEY --project-scope
-agentengine secret set LLM_API_KEY --project-scope
-agentengine secret set MONGODB_DATABASE --project-scope
-
-# 4) Aplicar la configuración de memoria (usa el project-config.yaml de la raíz del repo)
-agentengine memory configure --context mi-memoria
-agentengine memory apply --wait --context mi-memoria
-
-# 5) Permitir las IPs del data plane en el cluster
-agentengine atlas profile save --context mi-memoria
-agentengine atlas setup-ip-access --context mi-memoria
-
-# 6) Crear y desplegar el workspace (sin esto: AGENT_NOT_DEPLOYED / NO_WORKSPACE_ENDPOINT)
-agentengine init && agentengine deploy
-
-# 7) Service account (devuelve client id y secret)
-agentengine service-account create memory-service --context mi-memoria --role PROJECT_OWNER
+## Estructura
 ```
-Y en el `.env`: `AGENTIC_MEMORY_PROJECT_ID`, `AGENTIC_MEMORY_CLIENT_ID`, `AGENTIC_MEMORY_CLIENT_SECRET`.
-
-### `project-config.yaml` (en la raíz del repo)
-
-Es **necesario** para `agentengine memory configure/apply`: define el modelo de embeddings de la memoria (`voyage`) y el LLM de extracción (`extraction_llm`: `base_url`, `model`, `auth_header` y el nombre del secret `LLM_API_KEY`). No contiene claves, solo referencias a secrets. Ajusta `base_url` y `auth_header` al LLM al que pertenezca tu `LLM_API_KEY`. Ejecuta los comandos `agentengine` desde la raíz del repo para que lo encuentre.
-
-### Qué valor va en cada secret de Agent Engine
-
-El servidor de memoria corre **dentro de Agent Engine**, no en tu máquina, así que no ve tu `.env`: hay que subirle sus propios secrets de proyecto. Los valores salen de tu `.env`:
-
-| Secret de Agent Engine | Sale de la variable | Para qué lo usa la memoria |
-|---|---|---|
-| `MONGODB_URI` | `MONGODB_URI` | Conectar al **mismo cluster** que los documentos y escribir ahí sus colecciones de memoria |
-| `MONGODB_DATABASE` | `MONGODB_DATABASE` (`graphrag_demo`) | Base de datos en la que guarda la memoria, junto a `chunks_*` y `knowledge_graph` |
-| `VOYAGE_API_KEY` | `VOYAGE_API_KEY` | Generar los embeddings de los recuerdos (modelo `voyage` de `project-config.yaml`) |
-| `LLM_API_KEY` | `LLM_API_KEY` | Extraer en segundo plano los recuerdos (semánticos, episódicos…) con el `extraction_llm`; debe corresponder a su `base_url` y `auth_header` |
-
-Y qué hace cada variable de la app al hablar con la memoria:
-
-| Variable de la app | Qué es |
-|---|---|
-| `AGENTIC_MEMORY_PROJECT_ID` | Proyecto de Agent Engine donde vive la memoria (la organización va implícita en el token) |
-| `AGENTIC_MEMORY_CLIENT_ID` / `AGENTIC_MEMORY_CLIENT_SECRET` | Service account que la app canjea por un token (se renueva solo) |
-
-`LLM_API_KEY` y `MONGODB_DATABASE` solo se usan para crear los secrets; la app no los lee. Ejemplo para subirlos sin escribirlos a mano:
-```bash
-set -a; source .env; set +a
-printf %s "$LLM_API_KEY"       | agentengine secret set LLM_API_KEY --project-scope --context mi-memoria
-printf %s "$MONGODB_DATABASE"  | agentengine secret set MONGODB_DATABASE --project-scope --context mi-memoria
+app/       main, config, settings, db, setup_indexes, loaders, embeddings, ingest,
+           github_ingest, graph_store, graph_view, vector_search, memory, chat, flow_store, static/
+scripts/   setup_agent_engine.sh   # memoria en Agent Engine desde el .env
+tests/     pytest sin red
 ```
-(Revisa con `agentengine secret set --help` si tu versión admite leer el valor por stdin; si no, usa la consola: Secrets > Add Secrets.)
-
-> - El service account con rol `PROJECT_OWNER`/`PROJECT_READ_ONLY` exige el *Atlas service account pairing* en el proyecto.
-> - Los cambios en Secrets se aplican en el siguiente despliegue o al forzar una sincronización.
-> - La app canjea el client id/secret por un token y lo renueva sola; la organización nunca va en el `.env`.
-> - Si la sesión de la CLI caduca (`session expired`), repite `agentengine auth login`.
-
-## Estructura del proyecto
-```
-app/
-├── main.py            # FastAPI: chat, ajustes, ingesta, estado y grafo
-├── config.py          # credenciales (.env) y constantes fijas
-├── settings.py        # ajustes editables desde la UI (se guardan en MongoDB, sin secretos)
-├── db.py              # MongoClient compartido
-├── setup_indexes.py   # colecciones e índices en código
-├── loaders.py         # pdf/md/txt -> páginas -> chunks
-├── embeddings.py      # Voyage manual (context / multimodal)
-├── ingest.py          # ingesta de un documento según la estrategia + grafo
-├── github_ingest.py   # repos de GitHub -> grafo determinista + docs
-├── graph_store.py     # GraphRAG: MongoDBGraphStore + $graphLookup
-├── graph_view.py      # NetworkX -> JSON para el visor
-├── vector_search.py   # $vectorSearch + $rerank
-├── memory.py          # Agent Engine Memory
-├── chat.py            # memoria + vector + grafo + LLM
-├── flow_store.py      # flujo de cada petición e historial
-└── static/            # UI (index.html, app.js, graph.js, style.css)
-tests/                 # pytest sin red
-```
-
-## Notas
-- **Seguridad:** ninguna credencial está en el código; todo vive en `.env` (ignorado por git) y solo se versiona `.env.example`. Las API keys introducidas en la UI viven solo en la memoria del proceso.
-- **Memoria persistente:** el navegador guarda un `thread_id` en `localStorage`, que se usa como `session_id` en Agent Engine Memory.
-
-## Limitaciones (a propósito)
-Sin MCP ni Databricks, sin autenticación/roles, sin actualización automática de repos, AST solo para Python (otros lenguajes: endpoints por regex), ingesta síncrona, sin streaming de tokens.
 
 ## Pruebas
-`pytest -q` (sin red). Checklist manual:
-1. Arrancar → pestaña Configuración → Estado muestra índices.
-2. `auto_embed` con chunk 600/100 sobre `PDFs/FAQS.pdf` → más chunks que con 1000/200; en `chunks_auto` no hay campo `embedding`.
-3. Cambiar modelo autoEmbed → aparece un índice `idx_auto_<modelo>` (BUILDING → READY).
-4. `voyage_context` → sliders deshabilitados; subir un `.md`.
-5. Seleccionar la carpeta `PDFs/` → se indexan los 4 PDFs.
-6. Analizar 2 repos relacionados → nodos Repository/Library/Endpoint/Function y `DEPENDS_ON` entre ellos.
-7. Preguntar en modo `vector`, `graph` e `hybrid` y comparar el panel de flujo; clic en un nodo del grafo lo expande.
-8. Reiniciar → los ajustes persisten; las API keys de la UI no.
+`pytest -q` (sin red). Comprobación manual: ingerir `PDFs/FAQS.pdf` con `auto_embed` a 600/100 y ver que genera más chunks que a 1000/200 (en `chunks_auto` no hay campo `embedding`); analizar 2 repos relacionados y ver la relación `DEPENDS_ON` en la pestaña Grafo.
+
+> **Seguridad:** ninguna credencial está en el código; todo va en `.env` (ignorado por git). Las API keys escritas en la UI viven solo en la memoria del servidor.
