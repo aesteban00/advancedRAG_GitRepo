@@ -43,7 +43,7 @@ De cada repo de GitHub se extrae, sin LLM: descripción, librerías y versiones 
 1. Python 3.11 o superior (lo exige el SDK de Agent Engine Memory).
 2. Cluster **MongoDB Atlas** con Vector Search y Automated Embedding (M10+ recomendado). `$rerank` requiere **MongoDB 9.0+**, **Native Reranking** activado en Project Settings y, para `rerank-3`, M10+. Si tu cluster no lo cumple, pon `RERANK_ENABLED = False` en `app/config.py`.
 3. API key de **Voyage AI** (solo para las estrategias manuales `voyage_context` y `voyage_multimodal`).
-4. API key de un **LLM compatible con OpenAI** (por defecto DeepSeek).
+4. API key de un **LLM compatible con OpenAI** (OpenAI, Azure OpenAI, un gateway corporativo, etc.).
 5. Opcional: `GITHUB_TOKEN` (sube el límite de la API de GitHub de 60 a 5000 peticiones/h) y acceso a **Agent Engine Memory** (ver más abajo).
 
 ## Instalación y ejecución
@@ -70,8 +70,8 @@ Solo **credenciales**. Colecciones, índices y re-ranking están fijos en `app/c
 
 | Variable | Descripción |
 |---|---|
-| `DEEPSEEK_API_KEY` | API key del LLM (editable en caliente desde Configuración, solo en memoria) |
-| `DEEPSEEK_BASE_URL` / `DEEPSEEK_MODEL` | (opcionales) URL base y modelo del LLM por defecto |
+| `CHAT_LLM_API_KEY` | API key del modelo de chat (editable en caliente desde Configuración, solo en memoria) |
+| `CHAT_LLM_BASE_URL` / `CHAT_LLM_MODEL` | URL base y nombre del modelo de chat por defecto (cualquier proveedor compatible con la API de OpenAI) |
 | `VOYAGE_API_KEY` | API key de Voyage AI (estrategias manuales) |
 | `MONGODB_URI` | Cadena de conexión a Atlas |
 | `GITHUB_TOKEN` | (opcional) token de solo lectura para la API de GitHub |

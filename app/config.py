@@ -4,7 +4,7 @@
 #  Ajustes de la Demo, en dos grupos:
 #
 #  1) CREDENCIALES (secretos): se leen del .env, que NO se sube a git.
-#       MONGODB_URI, VOYAGE_API_KEY, DEEPSEEK_API_KEY y AGENTIC_MEMORY_*
+#       MONGODB_URI, VOYAGE_API_KEY, CHAT_LLM_API_KEY y AGENTIC_MEMORY_*
 #     (los LLM tambien se pueden cambiar en caliente desde la pestana Configuracion).
 #
 #  2) AJUSTES FIJOS: modelos de Voyage, base de datos, colecciones,
@@ -26,9 +26,11 @@ load_dotenv()
 # ======================= 1) CREDENCIALES (.env) =======================
 
 # ------------------------- LLM (compatible con OpenAI) -------------------------
-DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY")
-DEEPSEEK_BASE_URL = os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com")
-DEEPSEEK_MODEL = os.getenv("DEEPSEEK_MODEL", "deepseek-v4-flash-0731")
+# Modelo de chat por defecto (cualquier proveedor compatible con la API de OpenAI).
+# Tambien se puede cambiar desde la pestana Configuracion.
+CHAT_LLM_API_KEY = os.getenv("CHAT_LLM_API_KEY")
+CHAT_LLM_BASE_URL = os.getenv("CHAT_LLM_BASE_URL", "https://api.openai.com/v1")
+CHAT_LLM_MODEL = os.getenv("CHAT_LLM_MODEL", "")
 
 # ------------------------- VoyageAI -------------------------
 VOYAGE_API_KEY = os.getenv("VOYAGE_API_KEY")

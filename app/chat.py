@@ -6,10 +6,10 @@
 #   1. Recuperar contexto de MEMORIA  (conversaciones anteriores)
 #   2. Recuperar contexto de DOCUMENTOS (Atlas Vector Search) y del GRAFO ($graphLookup)
 #   3. Construir el prompt del sistema con ambos contextos
-#   4. Llamar a DeepSeek para generar la respuesta
+#   4. Llamar al modelo de chat para generar la respuesta
 #   5. Registrar el turno en la memoria
 #
-#  DeepSeek es compatible con la API de OpenAI, asi que usamos el
+#  El modelo de chat es cualquiera compatible con la API de OpenAI, asi que usamos el
 #  paquete "openai" apuntando a su base_url.
 # ============================================================
 
@@ -32,6 +32,8 @@ def _llm(role: str = "chat") -> OpenAI:
     cfg = settings.llm(role)
     if not cfg["api_key"]:
         raise RuntimeError(f"Falta la API key del LLM de {role} (.env o Configuracion)")
+    if not cfg["model"]:
+        raise RuntimeError("Falta el modelo de chat (CHAT_LLM_MODEL en .env o Configuracion)")
     return OpenAI(api_key=cfg["api_key"], base_url=cfg["base_url"])
 
 

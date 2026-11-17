@@ -9,10 +9,10 @@ memory:
     model: "voyage-4-large"
     dimension: 1024
 
-  # LLM used for background extraction via the Grove gateway (DeepSeek).
+  # LLM used for background extraction via un endpoint compatible con OpenAI.
   extraction_llm:
     provider: openai
-    model: deepseek-v4-flash-0731
+    model: <modelo-de-extraccion>
     base_url: https://grove-gateway-prod.azure-api.net/grove-foundry-prod/openai/v1
     api_key_secret: LLM_API_KEY
     auth_header: api-key

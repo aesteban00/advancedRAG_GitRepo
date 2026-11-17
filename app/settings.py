@@ -93,9 +93,9 @@ def llm(role: str) -> dict:
     cfg = get()["llm"]
     src = "chat" if cfg["same_for_all"] else role
     return {
-        "base_url": cfg[src]["base_url"] or config.DEEPSEEK_BASE_URL,
-        "model": cfg[src]["model"] or config.DEEPSEEK_MODEL,
-        "api_key": _keys[src] or config.DEEPSEEK_API_KEY,
+        "base_url": cfg[src]["base_url"] or config.CHAT_LLM_BASE_URL,
+        "model": cfg[src]["model"] or config.CHAT_LLM_MODEL,
+        "api_key": _keys[src] or config.CHAT_LLM_API_KEY,
     }
 
 
