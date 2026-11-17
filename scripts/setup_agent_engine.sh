@@ -32,7 +32,11 @@ done
 run() { echo "+ $*"; [ -n "${DRY_RUN:-}" ] || "$@"; }
 secret() {  # sube un secret de proyecto leyendo el valor por stdin (no queda en el historial)
   echo "+ agentengine secret set $1 --stdin --project-scope --context $CTX"
-  [ -n "${DRY_RUN:-}" ] || printf %s "$2" | agentengine secret set "$1" --stdin --project-scope --context "$CTX"
+  [ -n "${DRY_RUN:-}" ] && return 0
+  printf %s "$2" | agentengine secret set "$1" --stdin --project-scope --context "$CTX" || {
+    echo "AVISO: no se pudo subir $1 (¿tu usuario no es PROJECT_OWNER?). Si ya lo creaste en la consola"
+    echo "       (Secrets > Add Secrets) puedes ignorarlo; si no, crealo alli o pide el rol PROJECT_OWNER."
+  }
 }
 
 echo "== 1/5 Context (organizacion + proyecto de Agent Engine)"
