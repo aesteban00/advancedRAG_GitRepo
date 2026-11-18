@@ -455,3 +455,11 @@ body.explain-active .layout { height: calc(100vh - 48px); overflow: hidden; }
 body.explain-active .sidebar { position: sticky; top: 0; height: calc(100vh - 48px); overflow-y: auto; flex-shrink: 0; }
 body.explain-active .content { flex: 1; min-width: 0; overflow: hidden; padding: 20px 28px; }
 body.explain-active #view-explain { height: 100%; min-height: 0; }
+
+/* ---- Separador ajustable del panel izquierdo (solo en Explicación) ---- */
+.side-resizer { display: none; width: 6px; flex-shrink: 0; cursor: col-resize; background: transparent; }
+.side-resizer:hover, body.side-dragging .side-resizer { background: var(--green); opacity: .45; }
+body.explain-active .side-resizer { display: block; }
+body.explain-active .sidebar { width: var(--side-w, 300px); min-width: 0; }
+body.explain-active.side-collapsed .sidebar { width: 0; padding: 0; border-right: 0; overflow: hidden; }
+body.side-dragging, body.side-dragging * { user-select: none; cursor: col-resize !important; }

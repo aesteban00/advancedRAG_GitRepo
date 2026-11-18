@@ -97,3 +97,28 @@ function showDetail(s) {
 })();
 document.getElementById("explain-refresh").addEventListener("click", loadExplain);
 document.getElementById("explain-q").addEventListener("keydown", (e) => { if (e.key === "Enter") loadExplain(); });
+
+// ---- Separador del panel izquierdo: arrastrar = ancho; doble clic = contraer / expandir ----
+(function sideResizer() {
+  const KEY = "explain_side_w", DEFAULT = 300, MAX = 640;
+  const handle = document.getElementById("side-resizer");
+  const apply = (w) => {
+    const v = Math.max(0, Math.min(MAX, Math.round(w)));
+    document.documentElement.style.setProperty("--side-w", v + "px");
+    document.body.classList.toggle("side-collapsed", v < 40);
+    localStorage.setItem(KEY, String(v));
+  };
+  apply(Number(localStorage.getItem(KEY)) || DEFAULT);
+  let start = null;
+  handle.addEventListener("mousedown", (e) => {
+    start = { x: e.clientX, w: parseFloat(getComputedStyle(document.querySelector(".sidebar")).width) || DEFAULT };
+    document.body.classList.add("side-dragging");
+    e.preventDefault();
+  });
+  window.addEventListener("mousemove", (e) => { if (start) apply(start.w + (e.clientX - start.x)); });
+  window.addEventListener("mouseup", () => { if (start) { start = null; document.body.classList.remove("side-dragging"); } });
+  handle.addEventListener("dblclick", () => {
+    const collapsed = document.body.classList.contains("side-collapsed");
+    apply(collapsed ? DEFAULT : 0);
+  });
+})();
