@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Motor Cognitivo (KB) · MongoDB Atlas</title>
-  <link rel="stylesheet" href="/static/style.css?v=41" />
+  <link rel="stylesheet" href="/static/style.css?v=42" />
 </head>
 <body>
   <!-- Barra superior (estilo consola Atlas) -->
@@ -188,7 +188,9 @@
         <div class="config-grid">
 
           <section class="card">
-            <h2>1. Modelos</h2>
+            <details class="fold">
+              <summary><h2>1. Modelos</h2></summary>
+              <div class="fold-body">
             <label class="fld"><span class="fld-text">Modelo de embedding (<span id="emb-strategy-name"></span>)</span>
               <select id="emb-model"></select></label>
             <p class="status" id="emb-help"></p>
@@ -206,10 +208,14 @@
               <label>Modelo <input type="text" id="graph-model" /></label>
             </div>
             <p class="warn">⚠ Las API keys solo viven en la memoria del servidor y se pierden al pararlo.</p>
+              </div>
+            </details>
           </section>
 
           <section class="card">
-            <h2>2. Ingesta</h2>
+            <details class="fold">
+              <summary><h2>2. Ingesta</h2></summary>
+              <div class="fold-body">
             <label class="chk"><input type="radio" name="strategy" value="auto_embed" /> Chunking manual + autoEmbed (Atlas genera los vectores)</label>
             <label class="chk"><input type="radio" name="strategy" value="voyage_context" /> voyage-context (embeddings contextuales)</label>
             <label class="chk"><input type="radio" name="strategy" value="voyage_multimodal" /> voyage-multimodal (texto + imagen)</label>
@@ -219,10 +225,14 @@
               <input type="range" id="chunk-overlap" step="50" min="0" /></label>
             <p class="status" id="chunk-help"></p>
             <label class="chk"><input type="checkbox" id="build-graph" /> Construir grafo con el LLM al ingerir</label>
+              </div>
+            </details>
           </section>
 
           <section class="card">
-            <h2>3. Recuperación</h2>
+            <details class="fold">
+              <summary><h2>3. Recuperación</h2></summary>
+              <div class="fold-body">
             <h4 class="sub">Qué fuentes de contexto se usan</h4>
             <label class="chk"><input type="radio" name="mode" value="hybrid" /> Documentos + grafo</label>
             <label class="chk"><input type="radio" name="mode" value="vector" /> Solo documentos (fragmentos)</label>
@@ -236,10 +246,14 @@
             <label class="fld"><span class="fld-text"><a href="https://www.mongodb.com/docs/manual/reference/operator/aggregation/graphlookup/#graphlookup-aggregation-stage" target="_blank" rel="noopener noreferrer">Profundidad del grafo</a></span> <input type="number" id="graph-depth" min="1" max="5" /></label>
             <button type="button" id="save-settings" class="btn primary">Guardar configuración</button>
             <span id="settings-status" class="status"></span>
+              </div>
+            </details>
           </section>
 
           <section class="card">
-            <h2>4. Fuentes</h2>
+            <details class="fold">
+              <summary><h2>4. Fuentes</h2></summary>
+              <div class="fold-body">
             <button id="visibility-toggle" class="toggle" type="button" data-visibility="public">Público</button>
             <label class="fld">Documentos individuales (.pdf, .md, .txt)
               <input type="file" id="files-input" multiple accept=".pdf,.md,.txt" /></label>
@@ -250,23 +264,27 @@
               <textarea id="repo-urls" rows="4" placeholder="https://github.com/owner/repo"></textarea></label>
             <button type="button" id="ingest-github" class="btn primary">Analizar repos</button>
             <ul id="ingest-log" class="ingest-log"></ul>
+              </div>
+            </details>
           </section>
 
           <section class="card status-card">
-            <div class="status-head">
-              <h2>5. Estado de MongoDB Atlas</h2>
-              <button type="button" id="refresh-status" class="btn">Refrescar</button>
-            </div>
-            <p class="status">Todo vive en el mismo cluster: chunks, vectores, grafo, memoria y ajustes.</p>
-            <div id="status-box"></div>
+            <details class="fold">
+              <summary><h2>5. Estado de MongoDB Atlas</h2></summary>
+              <div class="fold-body">
+                <div class="status-head"><button type="button" id="refresh-status" class="btn">Refrescar</button></div>
+                <p class="status">Todo vive en el mismo cluster: chunks, vectores, grafo, memoria y ajustes.</p>
+                <div id="status-box"></div>
+              </div>
+            </details>
           </section>
         </div>
       </section>
     </main>
   </div>
 
-  <script src="/static/graph.js?v=41"></script>
-  <script src="/static/explain.js?v=41"></script>
-  <script src="/static/app.js?v=41"></script>
+  <script src="/static/graph.js?v=42"></script>
+  <script src="/static/explain.js?v=42"></script>
+  <script src="/static/app.js?v=42"></script>
 </body>
 </html>

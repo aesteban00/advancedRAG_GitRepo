@@ -497,3 +497,14 @@ body.side-dragging, body.side-dragging * { user-select: none; cursor: col-resize
 .code-body .cl .t { flex: 1; }
 .code-body .cl.mg { color: #7cf5c8; background: rgba(124, 245, 200, .13); box-shadow: inset 3px 0 0 #7cf5c8; font-weight: 600; }
 .code-body .cl.mg .n { color: #7cf5c8; }
+
+/* ---- Configuracion: tarjetas desplegables (cerradas por defecto) ---- */
+.fold > summary { list-style: none; cursor: pointer; display: flex; align-items: center; gap: 8px; }
+.fold > summary::-webkit-details-marker { display: none; }
+.fold > summary h2 { margin: 0; flex: 1; }
+.fold > summary::after { content: "▸"; color: var(--muted); font-size: 1rem; transition: transform .15s; }
+.fold[open] > summary::after { transform: rotate(90deg); }
+.fold > summary:hover h2 { color: var(--green-dark); }
+.fold-body { margin-top: 12px; }
+.status-card .fold-body .status-head { margin-bottom: 8px; }
+.status-card .fold-body .status-head .btn { margin-left: auto; }
