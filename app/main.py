@@ -79,6 +79,15 @@ class ChatRequest(BaseModel):
     use_memory: bool = True
 
 
+@app.get("/users")
+def users():
+    """Usuarios conocidos (con datos) para el selector de la interfaz."""
+    try:
+        return vector_search.list_users()
+    except Exception as exc:
+        raise _http_error(exc)
+
+
 @app.get("/documents")
 def list_documents(user_id: str = "demo-user"):
     """PDFs publicos + privados del usuario indicado."""

@@ -2,12 +2,64 @@
    app.js - logica de la interfaz web (vanilla JS, sin frameworks).
    ============================================================ */
 
-// Usuario: se edita en la caja del panel izquierdo (se guarda en localStorage).
-//  - user_id: persona; propietaria de los PDFs privados y de su memoria.
+// Usuario: se ELIGE en el desplegable del panel izquierdo o se crea uno nuevo (se recuerda en localStorage).
+//  - user_id: etiqueta que separa lo publico de lo privado; propietaria de sus documentos y de su memoria.
+//    (No hay contrasenas: es una demo de un solo equipo.)
 // El HILO (thread_id) no se escribe: lo define la SESION que se abre.
 //  - thread_id: conversacion; la memoria corta (stm) es solo de ese hilo.
-const userInput = document.getElementById("user-input");
-userInput.value = localStorage.getItem("user_id") || "demo-user";
+const userInput = document.getElementById("user-input");   // es un <select>: .value = usuario activo
+const NEW_USER = "__new__";
+const USER_RE = /^[A-Za-z0-9][A-Za-z0-9_.@-]{0,39}$/;
+const knownUsers = new Map();   // user_id -> {files, repos, sessions}, viene de GET /users
+let activeUser = localStorage.getItem("user_id") || "demo-user";
+const savedUsers = () => { try { return JSON.parse(localStorage.getItem("known_users") || "[]"); } catch (e) { return []; } };
+const rememberUser = (u) => localStorage.setItem("known_users", JSON.stringify([...new Set([...savedUsers(), u])]));
+
+function renderUserSelect() {
+  userInput.replaceChildren();
+  // Usuarios con datos (servidor) + creados aqui aunque aun no tengan datos + el activo.
+  for (const u of [...new Set([...knownUsers.keys(), ...savedUsers(), activeUser])].sort()) {
+    const s = knownUsers.get(u);
+    userInput.add(new Option(s ? `${u} · ${s.files} docs · ${s.repos} repos` : `${u} · (nuevo)`, u));
+  }
+  userInput.add(new Option("+ Nuevo usuario…", NEW_USER));
+  userInput.value = activeUser;
+}
+async function loadUsers() {
+  try {
+    const list = await (await fetch("/users")).json();
+    if (Array.isArray(list)) { knownUsers.clear(); list.forEach((u) => knownUsers.set(u.user_id, u)); }
+  } catch (e) { /* sin servidor: se usan los recordados */ }
+  renderUserSelect();
+}
+function showNewUser(show) {
+  document.getElementById("user-new").hidden = !show;
+  document.getElementById("user-msg").textContent = "";
+  if (show) { const i = document.getElementById("user-new-name"); i.value = ""; i.focus(); }
+}
+// Cambia de usuario: las sesiones y los documentos privados son por usuario.
+function switchUser(u) { activeUser = u; renderUserSelect(); saveIds(); loadDocuments(); openThread(newThreadId()); }
+function createUser() {
+  const name = document.getElementById("user-new-name").value.trim();
+  if (!USER_RE.test(name)) {
+    document.getElementById("user-msg").textContent = "Usa 1-40 caracteres: letras, números, _ . @ - (empezando por letra o número).";
+    return;
+  }
+  rememberUser(name); showNewUser(false); switchUser(name);
+}
+userInput.addEventListener("change", () => {
+  if (userInput.value === NEW_USER) { userInput.value = activeUser; showNewUser(true); return; }
+  showNewUser(false); switchUser(userInput.value);
+});
+document.getElementById("user-new-ok").addEventListener("click", createUser);
+document.getElementById("user-new-cancel").addEventListener("click", () => showNewUser(false));
+document.getElementById("user-new-name").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") { e.preventDefault(); createUser(); }
+  if (e.key === "Escape") showNewUser(false);
+});
+renderUserSelect();
+loadUsers();
+
 let threadId = localStorage.getItem("thread_id") || newThreadId();
 const saveIds = () => {
   localStorage.setItem("user_id", userInput.value.trim());
@@ -16,8 +68,6 @@ const saveIds = () => {
 function newThreadId() {
   return "hilo-" + Date.now().toString(36).slice(-6);
 }
-// Al cambiar de usuario empezamos una sesion nueva (las sesiones son por usuario).
-userInput.addEventListener("change", () => { loadDocuments(); openThread(newThreadId()); });
 saveIds();
 
 // Memoria: ON/OFF. Estado global del toggle. Empieza activada.
@@ -119,7 +169,7 @@ async function deleteSelected() {
     status.className = "doc-status error"; status.textContent = "Error: " + err.message;
   }
   selected.clear();
-  loadDocuments(); loadStatus(); loadOverviewGraph();
+  loadDocuments(); loadStatus(); loadOverviewGraph(); loadUsers();
 }
 document.getElementById("doc-delete").addEventListener("click", deleteSelected);
 
@@ -648,7 +698,7 @@ async function runIngest(_btn, url, opts) {
     line("error", "Error: " + (err.message || err));
   }
   document.querySelectorAll("#view-config button").forEach((b) => (b.disabled = false));
-  loadDocuments(); loadStatus(); loadOverviewGraph();
+  loadDocuments(); loadStatus(); loadOverviewGraph(); loadUsers();
 }
 $("ingest-files").addEventListener("click", () => {
   const fd = new FormData();

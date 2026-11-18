@@ -39,6 +39,13 @@ Además: un modelo de **embedding**, un **LLM para construir el grafo** y otro *
 - **Grafo**: visor navegable (NetworkX calcula el layout; se dibuja en SVG). Zoom y arrastre; **filtros** por tipo de nodo y de relación (el código —ficheros, clases, funciones— va oculto por defecto); **clic** = ficha de la entidad (atributos, fuentes, relaciones salientes y entrantes clicables); **doble clic** = expandir o colapsar su vecindario sin perder lo que ya ves; búsqueda con autocompletado y **camino más corto entre dos entidades** (`$graphLookup`), sin distinguir si vienen de repos o de documentos.
 - **Configuración**: modelos, ingesta, recuperación, fuentes y estado de los índices de Atlas.
 
+## Usuarios
+El **usuario** del panel izquierdo es una etiqueta (sin contraseña) que separa lo público de lo privado: los documentos y repos *públicos* los ve todo el mundo; los *privados* y las sesiones de chat, solo su usuario.
+- Es un **desplegable** con los usuarios que ya tienen datos (propietarios de documentos, de repos o de sesiones), con sus recuentos: `demo-user · 5 docs · 2 repos`.
+- **+ Nuevo usuario…** abre un campo para crear otro (1-40 caracteres: letras, números, `_ . @ -`). Se recuerda en el navegador aunque aún no tenga datos.
+- Cambiar de usuario abre una sesión de chat nueva y recarga la lista de documentos. Para eliminar algo hay que ser su propietario: cambia al usuario que lo subió.
+- API: `GET /users`.
+
 ## Eliminar documentos y repos
 En la lista **Documentos** del panel izquierdo cada elemento tiene una casilla. Márcalos (o usa *Todos*) y pulsa **Eliminar (N)**; la interfaz pide confirmación porque no se puede deshacer.
 - Se borran sus fragmentos de las tres colecciones (con `autoEmbed`, Atlas retira solo los vectores) y **lo que solo ellos aportaron al grafo**. Si una entidad viene de varias fuentes (p. ej. una organización citada en dos documentos) se conserva mientras le quede alguna; las relaciones que apuntaban a entidades eliminadas se limpian.

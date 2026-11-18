@@ -285,7 +285,7 @@ button.toggle[data-visibility="private"] { background: #fff4d6; border-color: #f
 
 /* Caja de usuario en el panel izquierdo */
 .user-box { padding: 0 20px 16px; }
-.user-box input[type="text"] { width: 100%; }
+.user-box input[type="text"], .user-box select { width: 100%; padding: 8px 10px; border: 1px solid #b8c4c2; border-radius: 8px; background: #fff; font-size: 0.85rem; }
 
 /* Panel derecho: tokens y ajustes del LLM */
 .flow h3 { margin: 20px 0 8px; padding-top: 14px; border-top: 1px solid var(--border); font-size: 0.9rem; font-weight: 600; }
@@ -394,3 +394,9 @@ code { background: #f1f4f3; padding: 0 4px; border-radius: 4px; font-size: 0.85e
 .btn.danger:disabled { opacity: .45; cursor: not-allowed; }
 .doc-status { padding: 6px 20px 0; font-size: 0.74rem; word-break: break-word; }
 .doc-status .ok { color: var(--green-dark); } .doc-status .error, .doc-status.error { color: #b42318; }
+
+.user-new { display: flex; gap: 6px; margin-top: 8px; }
+.user-new[hidden] { display: none; }
+.user-new input { flex: 1; min-width: 0; }
+.user-new .btn { padding: 6px 10px; }
+#user-msg { margin: 6px 0 0; font-size: 0.72rem; color: #b42318; }

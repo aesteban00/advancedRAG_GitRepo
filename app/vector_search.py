@@ -184,6 +184,32 @@ def list_documents(user_id: str) -> dict:
             "private": [d for d in docs if d["visibility"] == "private" and d["owner"] == user_id]}
 
 
+def list_users() -> list[dict]:
+    """Usuarios conocidos y cuanto tienen: propietarios de ficheros, de repos y de sesiones de chat.
+    (El usuario es solo una etiqueta para separar lo publico de lo privado; no hay contrasenas.)"""
+    users: dict[str, dict] = {}
+
+    def row(u):
+        return users.setdefault(u, {"user_id": u, "files": set(), "repos": set(), "sessions": set()})
+
+    for n in (config.COLL_AUTO, config.COLL_CONTEXT, config.COLL_MULTIMODAL):
+        for r in db.coll(n).aggregate([
+                {"$match": {"metadata.source_type": {"$ne": "github"}}},
+                {"$group": {"_id": {"o": "$metadata.owner", "s": "$metadata.source"}}}]):
+            if r["_id"].get("o"):
+                row(r["_id"]["o"])["files"].add(r["_id"]["s"])
+    for d in db.coll(config.COLL_GRAPH).find({"type": "Repository", "attributes.owner_user": {"$exists": True},
+                                              "attributes.sources": {"$regex": "^github:"}}, {"attributes.owner_user": 1}):
+        if d["_id"].count("/") == 1:
+            for u in d["attributes"]["owner_user"]:
+                row(u)["repos"].add(d["_id"])
+    for r in db.coll(config.COLL_FLOWS).aggregate([{"$group": {"_id": {"u": "$user_id", "t": "$thread_id"}}}]):
+        if r["_id"].get("u"):
+            row(r["_id"]["u"])["sessions"].add(r["_id"]["t"])
+    return sorted(({"user_id": u, "files": len(v["files"]), "repos": len(v["repos"]), "sessions": len(v["sessions"])}
+                   for u, v in users.items()), key=lambda x: x["user_id"])
+
+
 def counts() -> dict:
     return {n: db.coll(n).estimated_document_count()
             for n in (config.COLL_AUTO, config.COLL_CONTEXT, config.COLL_MULTIMODAL)}
