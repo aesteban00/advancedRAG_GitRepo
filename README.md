@@ -93,12 +93,11 @@ Abre http://localhost:8090. Al arrancar se crean **en código** colecciones e í
 | `CHAT_LLM_API_KEY` / `CHAT_LLM_BASE_URL` / `CHAT_LLM_MODEL` | Modelo de chat por defecto (cualquier proveedor compatible con OpenAI). Editable en la pestaña Configuración |
 | `VOYAGE_API_KEY` | Embeddings de las estrategias manuales y de la memoria |
 | `MONGODB_URI` | Conexión a Atlas (la app y la memoria usan el mismo cluster) |
-| `MONGODB_DB` | (Opcional) Base de datos de la app; por defecto `graphrag_demo`. Cámbiala (p. ej. `graphrag_dev`) para probar una rama sin tocar los datos de `main`: colecciones e índices se crean solos al arrancar |
+| `MONGODB_DATABASE` | Base de datos de la app **y** de la memoria (el script la sube como secret). Por defecto `graphrag_demo`; cámbiala (p. ej. `graphrag_dev`) para probar una rama sin tocar los datos de `main`: colecciones e índices se crean solos al arrancar |
 | `GITHUB_TOKEN` | (Opcional) sube el límite de GitHub de 60 a 5000 peticiones/h |
 | `AGENTIC_MEMORY_PROJECT_ID` | Proyecto de Agent Engine donde vive la memoria |
 | `AGENTIC_MEMORY_CLIENT_ID` / `AGENTIC_MEMORY_CLIENT_SECRET` | Service account que la app usa para hablar con la memoria |
 | `MEMORY_LLM_BASE_URL` / `MEMORY_LLM_MODEL` / `MEMORY_LLM_AUTH_HEADER` / `MEMORY_LLM_API_KEY` | Solo para el script: **LLM de extracción de la memoria**, independiente del modelo de chat. Debe ser alcanzable desde Agent Engine (ver arriba). La clave se sube como secret `LLM_API_KEY` |
-| `MONGODB_DATABASE` | Solo para el script: base de datos de la memoria (`graphrag_demo`) |
 | `AGENTENGINE_ORG_ID` | Solo para el script, **obligatorio**: id de tu organización de Agent Engine. Con `AGENTIC_MEMORY_PROJECT_ID` fija dónde se despliega; el script aborta si el context existente apunta a otra org/proyecto |
 | `AGENTENGINE_CONTEXT` | Solo para el script: nombre del context de la CLI (por defecto `graphrag`) |
 
