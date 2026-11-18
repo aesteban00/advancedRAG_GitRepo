@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Motor Cognitivo (KB) · MongoDB Atlas</title>
-  <link rel="stylesheet" href="/static/style.css?v=36" />
+  <link rel="stylesheet" href="/static/style.css?v=37" />
 </head>
 <body>
   <!-- Barra superior (estilo consola Atlas) -->
@@ -24,6 +24,10 @@
   <div class="layout">
     <!-- Menu lateral -->
     <nav class="sidebar">
+      <!-- Detalle de la pestaña Explicación: ocupa el panel izquierdo fijo mientras esa pestaña está activa -->
+      <aside class="explain-detail" id="explain-detail">
+            <p class="status">Pulsa un paso para ver la llamada real a MongoDB que hace la aplicación, lista para copiar en MongoDB Compass.</p>
+          </aside>
       <div class="nav-title">PIPELINE</div>
       <div class="nav-note" id="pipeline-note"></div>
 
@@ -150,9 +154,6 @@
               <div class="boxes" id="boxes-query"></div>
             </section>
           </div>
-          <aside class="explain-detail" id="explain-detail">
-            <p class="status">Pulsa un paso para ver la llamada real a MongoDB que hace la aplicación, lista para copiar en MongoDB Compass.</p>
-          </aside>
         </div>
       </section>
 
@@ -239,8 +240,8 @@
     </main>
   </div>
 
-  <script src="/static/graph.js?v=36"></script>
-  <script src="/static/explain.js?v=36"></script>
-  <script src="/static/app.js?v=36"></script>
+  <script src="/static/graph.js?v=37"></script>
+  <script src="/static/explain.js?v=37"></script>
+  <script src="/static/app.js?v=37"></script>
 </body>
 </html>

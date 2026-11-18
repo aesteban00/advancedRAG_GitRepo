@@ -562,6 +562,7 @@ function showView(name) {
   document.getElementById("view-config").hidden = name !== "config";
   document.getElementById("view-graph").hidden = name !== "graph";
   document.getElementById("view-explain").hidden = name !== "explain";
+  document.body.classList.toggle("explain-active", name === "explain");
   if (name === "explain") loadExplain();
   document.querySelectorAll(".main-tabs button").forEach((b) => b.classList.toggle("active", b.dataset.view === name));
   localStorage.setItem("view", name);

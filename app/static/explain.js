@@ -63,6 +63,7 @@ function renderLane(id, steps) {
 function showDetail(s) {
   const d = document.getElementById("explain-detail");
   d.replaceChildren();
+  d.hidden = false;
   d.appendChild(exEl("span", `kind ${s.kind}`, s.kind));
   d.appendChild(exEl("h2", "", s.title));
   d.appendChild(exEl("p", "", s.summary));
@@ -89,5 +90,10 @@ function showDetail(s) {
   }
 }
 
+// Panel izquierdo en esta pestaña: aviso inicial hasta que se pulsa una caja.
+(function initDetail() {
+  const d = document.getElementById("explain-detail");
+  d.replaceChildren(exEl("p", "status", "Pulsa un paso de la pestaña para ver aquí su llamada a MongoDB, lista para copiar en MongoDB Compass."));
+})();
 document.getElementById("explain-refresh").addEventListener("click", loadExplain);
 document.getElementById("explain-q").addEventListener("keydown", (e) => { if (e.key === "Enter") loadExplain(); });
