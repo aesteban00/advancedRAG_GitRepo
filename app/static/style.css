@@ -406,3 +406,5 @@ code { background: #f1f4f3; padding: 0 4px; border-radius: 4px; font-size: 0.85e
 
 /* Etiquetas con texto y valores mezclados: una sola linea (sin partirse en la columna flex) */
 .fld-text { display: block; white-space: normal; }
+
+.fld a { color: var(--green-dark); text-decoration: underline; }
