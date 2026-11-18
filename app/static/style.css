@@ -403,3 +403,6 @@ code { background: #f1f4f3; padding: 0 4px; border-radius: 4px; font-size: 0.85e
 
 .admin-note { margin: 8px 0 0; padding: 6px 10px; font-size: 0.72rem; background: #fff4d6; border: 1px solid #ffc010; border-radius: 8px; color: #6b4a00; }
 .admin-note[hidden] { display: none; }
+
+/* Etiquetas con texto y valores mezclados: una sola linea (sin partirse en la columna flex) */
+.fld-text { display: block; white-space: normal; }

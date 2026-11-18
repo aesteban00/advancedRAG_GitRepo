@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Motor Cognitivo (KB) · MongoDB Atlas</title>
-  <link rel="stylesheet" href="/static/style.css?v=33" />
+  <link rel="stylesheet" href="/static/style.css?v=34" />
 </head>
 <body>
   <!-- Barra superior (estilo consola Atlas) -->
@@ -137,7 +137,7 @@
 
           <section class="card">
             <h2>1. Modelos</h2>
-            <label class="fld">Modelo de embedding (<span id="emb-strategy-name"></span>)
+            <label class="fld"><span class="fld-text">Modelo de embedding (<span id="emb-strategy-name"></span>)</span>
               <select id="emb-model"></select></label>
             <p class="status" id="emb-help"></p>
             <label class="chk"><input type="checkbox" id="llm-same" checked /> Usar el mismo LLM para grafo y chat</label>
@@ -161,9 +161,9 @@
             <label class="chk"><input type="radio" name="strategy" value="auto_embed" /> Chunking manual + autoEmbed (Atlas genera los vectores)</label>
             <label class="chk"><input type="radio" name="strategy" value="voyage_context" /> voyage-context (embeddings contextuales)</label>
             <label class="chk"><input type="radio" name="strategy" value="voyage_multimodal" /> voyage-multimodal (texto + imagen)</label>
-            <label class="fld">Tamaño de chunk: <b id="chunk-size-val"></b>
+            <label class="fld"><span class="fld-text">Tamaño de chunk: <b id="chunk-size-val"></b></span>
               <input type="range" id="chunk-size" step="100" /></label>
-            <label class="fld">Solape: <b id="chunk-overlap-val"></b>
+            <label class="fld"><span class="fld-text">Solape: <b id="chunk-overlap-val"></b></span>
               <input type="range" id="chunk-overlap" step="50" min="0" /></label>
             <p class="status" id="chunk-help"></p>
             <label class="chk"><input type="checkbox" id="build-graph" /> Construir grafo con el LLM al ingerir</label>
@@ -213,7 +213,7 @@
     </main>
   </div>
 
-  <script src="/static/graph.js?v=33"></script>
-  <script src="/static/app.js?v=33"></script>
+  <script src="/static/graph.js?v=34"></script>
+  <script src="/static/app.js?v=34"></script>
 </body>
 </html>
