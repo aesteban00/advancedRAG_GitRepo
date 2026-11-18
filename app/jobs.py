@@ -71,7 +71,7 @@ def run_files(items: list[tuple[str, bytes]], user_id: str, visibility: str, log
     for i, (name, data) in enumerate(items, 1):
         log(f"Fichero {i}/{len(items)}: {name}")
         try:
-            r = ingest.ingest_file(name, data, user_id, visibility)
+            r = ingest.ingest_file(name, data, user_id, visibility, log=log)
             results.append(r)
             log(f"  ✓ {r['chunks']} chunks · {r['entities']} entidades" + (f" · avisos: {len(r['warnings'])}" if r["warnings"] else ""))
         except Exception as exc:

@@ -119,14 +119,19 @@ def upsert_entities(entities: list[dict]) -> int:
     return _bulk_upsert(entities)
 
 
-def add_text(text: str, source: str) -> int:
-    """El LLM extrae entidades/relaciones de cada trozo; se guardan con su fuente."""
+def add_text(text: str, source: str, log=None) -> int:
+    """El LLM extrae entidades/relaciones de cada trozo; se guardan con su fuente.
+    log (opcional): progreso 'trozo i/N' para verlo en la interfaz (una llamada al LLM por trozo)."""
+    log = log or (lambda m: None)
+    pieces = loaders.split_text(text, config.GRAPH_CHUNK_SIZE, 200)
     total = 0
-    for i, piece in enumerate(loaders.split_text(text, config.GRAPH_CHUNK_SIZE, 200)):
+    for i, piece in enumerate(pieces, 1):
+        log(f"  Grafo (LLM): trozo {i}/{len(pieces)}…")
         try:
             entities = get_store().extract_entities(piece)
         except Exception as exc:
             print(f"[grafo] AVISO trozo {i}: {exc}")
+            log(f"  Grafo: trozo {i} sin resultado ({str(exc)[:80]})")
             continue
         for e in entities:
             e["attributes"] = {**_norm_attrs(e.get("attributes")), "sources": [source]}

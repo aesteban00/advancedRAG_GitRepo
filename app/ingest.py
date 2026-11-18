@@ -22,7 +22,8 @@ BATCH = 50  # chunks por llamada a voyage-context (cada lote = un "documento")
 
 
 def ingest_file(filename: str, data: bytes, user_id: str, visibility: str,
-                source_type: str = "file", source: str | None = None) -> dict:
+                source_type: str = "file", source: str | None = None, log=None) -> dict:
+    log = log or (lambda m: None)
     s = settings.get()
     strategy = s["ingest"]["strategy"]
     model = s["embedding"][strategy]
@@ -41,6 +42,7 @@ def ingest_file(filename: str, data: bytes, user_id: str, visibility: str,
     for name in (config.COLL_AUTO, config.COLL_CONTEXT, config.COLL_MULTIMODAL):
         db.coll(name).delete_many({"metadata.source": source})
 
+    log(f"  {len(pages)} página(s) → {len(chunks)} chunks ({strategy})")
     docs = [{"text": c["text"], "metadata": {
         "source": source, "source_type": source_type, "page": c["page"], "chunk_index": i,
         "model": model, "strategy": strategy, "owner": user_id, "visibility": visibility}}
@@ -68,7 +70,7 @@ def ingest_file(filename: str, data: bytes, user_id: str, visibility: str,
     if s["ingest"]["build_graph"]:
         try:
             text = "\n".join(p["text"] for p in pages)
-            entities = graph_store.add_text(text, source=f"{source_type}:{source}")
+            entities = graph_store.add_text(text, source=f"{source_type}:{source}", log=log)
             graph_store.upsert_entities([graph_store.make_entity(
                 source, "Document", f"{source_type}:{source}", {"strategy": strategy, "pages": len(pages)})])
         except Exception as exc:
