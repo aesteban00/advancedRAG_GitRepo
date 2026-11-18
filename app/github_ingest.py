@@ -338,7 +338,9 @@ def ingest_repo(url: str, user_id: str, visibility: str, log=None) -> dict:
 def link_repos() -> int:
     """Relaciones entre repos: libreria interna o endpoint consumido."""
     coll = db.coll(config.COLL_GRAPH)
-    repos = list(coll.find({"type": "Repository"}))
+    # Solo repos con id "owner/repo". El grafo tambien tiene "Repository" extraidos por el LLM
+    # (p. ej. "Banco Sabadell") que no tienen barra: antes provocaban "list index out of range".
+    repos = [r for r in coll.find({"type": "Repository"}) if r["_id"].count("/") == 1]
     new = 0
     for a in repos:
         out, seen = [], set(zip(a["relationships"]["target_ids"], a["relationships"]["types"]))
@@ -348,7 +350,7 @@ def link_repos() -> int:
             if b["_id"] == a["_id"]:
                 continue
             via = None
-            if b["_id"] in deps or b["_id"].split("/")[1] in deps:
+            if b["_id"] in deps or b["_id"].split("/", 1)[1] in deps:
                 via = "library"
             else:
                 for p in b.get("attributes", {}).get("endpoint_paths", []):
