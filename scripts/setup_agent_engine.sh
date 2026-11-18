@@ -21,7 +21,7 @@ command -v agentengine >/dev/null || { echo "Instala la CLI 'agentengine' primer
 
 # --- valores del .env (la memoria usa su PROPIO LLM, MEMORY_LLM_*, independiente del de chat CHAT_LLM_*) ---
 CTX="${AGENTENGINE_CONTEXT:-graphrag}"
-DB="${MONGODB_DATABASE:-graphrag_demo}"
+DB="${MEMORY_MONGODB_DATABASE:-${MONGODB_DATABASE:-graphrag_demo}}"   # BBDD de la MEMORIA (en main = graphrag_demo; en ramas = <rama>_memory)
 LLM_KEY="${MEMORY_LLM_API_KEY:-}"
 AUTH_HEADER="${MEMORY_LLM_AUTH_HEADER:-authorization}"
 for v in MONGODB_URI VOYAGE_API_KEY MEMORY_LLM_BASE_URL MEMORY_LLM_MODEL AGENTIC_MEMORY_PROJECT_ID AGENTENGINE_ORG_ID; do

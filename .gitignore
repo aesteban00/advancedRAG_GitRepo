@@ -29,3 +29,6 @@ venv/
 *.log
 # Agente de memoria generado por scripts/setup_agent_engine.sh (contiene .env propio)
 agent-engine/
+
+# Perfiles privados por rama (credenciales de Agent Engine). Nunca se suben.
+envs/

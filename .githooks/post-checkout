@@ -1,0 +1,8 @@
+#!/bin/sh
+# Al cambiar de rama, ajusta .env (BBDD de app y memoria, context de Agent Engine) a esa rama.
+# $3 = 1 cuando el cambio es de rama (no de ficheros concretos).
+[ "$3" = "1" ] || exit 0
+BRANCH=$(git rev-parse --abbrev-ref HEAD)
+[ "$BRANCH" = "HEAD" ] && exit 0
+ROOT=$(git rev-parse --show-toplevel)
+python3 "$ROOT/scripts/branch_env.py" "$BRANCH" || echo "AVISO: no se pudo ajustar .env a la rama $BRANCH"
