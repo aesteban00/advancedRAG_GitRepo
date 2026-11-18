@@ -52,7 +52,9 @@ AGENTIC_MEMORY_BASE_URL = os.getenv("AGENTIC_MEMORY_BASE_URL")
 # ======================= 2) AJUSTES FIJOS (no editables por .env) =======================
 # Lo que SI se elige desde la UI (estrategia, modelos, chunking...) vive en settings.py.
 
-MONGODB_DB = "graphrag_demo"
+# Base de datos de la app. Se puede cambiar desde el .env (MONGODB_DB) para aislar los datos de una
+# rama de desarrollo sin tocar los de main. Por defecto: graphrag_demo.
+MONGODB_DB = os.getenv("MONGODB_DB", "graphrag_demo")
 
 # Ventaja MongoDB: chunks, vectores, grafo, flujos y ajustes en el MISMO cluster.
 COLL_AUTO = "chunks_auto"              # chunking manual + autoEmbed (Atlas genera los vectores)
