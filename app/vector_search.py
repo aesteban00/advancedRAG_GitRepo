@@ -104,22 +104,29 @@ def _targets(query: str) -> list[tuple[str, str, callable]]:
     ]
 
 
-def _search_collection(name: str, model: str, vec_fn, query: str, user_id: str, top_k: int, mode: str) -> list[dict]:
+def build_pipeline(coll_name: str, query: str, user_id: str, top_k: int, mode: str, model: str,
+                   vec_base: dict | None) -> list[dict]:
+    """Pipeline COMPLETO de busqueda (lo que ejecuta el chat y lo que muestra la pestaña Explicación).
+    vec_base: etapa $vectorSearch sin numCandidates/limit/filter (None en modo bm25)."""
     pool = top_k * POOL
-    vec = None if mode == "bm25" else {**vec_fn(model), "numCandidates": pool * 20, "limit": pool,
-                                       "filter": _filter(user_id, model)}
+    vec = None if (mode == "bm25" or vec_base is None) else {
+        **vec_base, "numCandidates": pool * 20, "limit": pool, "filter": _filter(user_id, model)}
     lex = None if mode == "vector" else _lexical_stage(query, user_id, model)
+    return _pipeline(vec, lex, mode, pool) + _rerank_stage(query) + [{"$limit": top_k}, _project_stage(coll_name)]
 
-    def run(v):
-        pipe = _pipeline(v, lex, mode, pool) + _rerank_stage(query) + [{"$limit": top_k}, _project_stage(name)]
-        return list(db.coll(name).aggregate(pipe))
+
+def _search_collection(name: str, model: str, vec_fn, query: str, user_id: str, top_k: int, mode: str) -> list[dict]:
+    base = None if mode == "bm25" else vec_fn(model)
+
+    def run(b):
+        return list(db.coll(name).aggregate(build_pipeline(name, query, user_id, top_k, mode, model, b)))
 
     try:
-        docs = run(vec)
+        docs = run(base)
     except OperationFailure as exc:
-        if name != config.COLL_AUTO or vec is None or "query" not in str(exc).lower():
+        if name != config.COLL_AUTO or base is None or "query" not in str(exc).lower():
             raise
-        docs = run({**vec, "query": query})   # versiones preview de autoEmbed: "query" como string
+        docs = run({**base, "query": query})   # versiones preview de autoEmbed: "query" como string
     return [_annotate(d, mode) for d in docs]
 
 

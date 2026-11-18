@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Motor Cognitivo (KB) · MongoDB Atlas</title>
-  <link rel="stylesheet" href="/static/style.css?v=35" />
+  <link rel="stylesheet" href="/static/style.css?v=36" />
 </head>
 <body>
   <!-- Barra superior (estilo consola Atlas) -->
@@ -16,6 +16,7 @@
     <nav class="main-tabs">
       <button type="button" data-view="chat" class="active">Chat</button>
       <button type="button" data-view="graph">Grafo</button>
+      <button type="button" data-view="explain">Explicación</button>
       <button type="button" data-view="config">Configuración</button>
     </nav>
   </header>
@@ -130,6 +131,31 @@
         </div>
       </section>
 
+      <!-- ============ Vista EXPLICACION: ingesta (arriba) y consulta (abajo) ============ -->
+      <section id="view-explain" class="view" hidden>
+        <div class="explain-wrap">
+          <div class="explain-left">
+            <div class="explain-top">
+              <h1>Explicación</h1>
+              <input type="text" id="explain-q" placeholder="pregunta de ejemplo (p. ej. límites de aportaciones)" />
+              <button type="button" id="explain-refresh" class="btn primary">Actualizar</button>
+            </div>
+            <div id="explain-status" class="explain-status"></div>
+            <section class="lane">
+              <h2>Ingesta</h2>
+              <div class="boxes" id="boxes-ingest"></div>
+            </section>
+            <section class="lane">
+              <h2>Consulta y recuperación</h2>
+              <div class="boxes" id="boxes-query"></div>
+            </section>
+          </div>
+          <aside class="explain-detail" id="explain-detail">
+            <p class="status">Pulsa un paso para ver la llamada real a MongoDB que hace la aplicación, lista para copiar en MongoDB Compass.</p>
+          </aside>
+        </div>
+      </section>
+
       <!-- ============ Vista CONFIGURACION ============ -->
       <section id="view-config" class="view" hidden>
         <h1>Configuración</h1>
@@ -213,7 +239,8 @@
     </main>
   </div>
 
-  <script src="/static/graph.js?v=35"></script>
-  <script src="/static/app.js?v=35"></script>
+  <script src="/static/graph.js?v=36"></script>
+  <script src="/static/explain.js?v=36"></script>
+  <script src="/static/app.js?v=36"></script>
 </body>
 </html>

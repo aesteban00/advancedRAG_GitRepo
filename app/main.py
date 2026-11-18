@@ -118,6 +118,16 @@ def users():
         raise _http_error(exc)
 
 
+@app.get("/explain")
+def explain_catalog(user_id: str = "demo-user", question: str = ""):
+    """Catalogo dinamico para la pestaña Explicacion: pasos de ingesta y consulta con su llamada real a MongoDB."""
+    try:
+        import explain
+        return explain.catalog(user_id, question)
+    except Exception as exc:
+        raise _http_error(exc)
+
+
 @app.get("/documents")
 def list_documents(user_id: str = "demo-user"):
     """PDFs publicos + privados del usuario indicado."""

@@ -151,11 +151,29 @@ def neighborhood(entity_id: str, depth: int) -> list[dict]:
     return _expand([entity_id], depth)
 
 
+def related_pipeline(start: list[str], max_depth: int, coll_name: str = config.COLL_GRAPH) -> list[dict]:
+    """Pipeline de $graphLookup: todo lo alcanzable desde `start` (hasta max_depth saltos), en UNA consulta.
+    Es el mismo recorrido que MongoDBGraphStore.related_entities, pero construido aqui para que la
+    pestaña Explicación muestre exactamente lo que se ejecuta."""
+    return [
+        {"$match": {"_id": {"$in": start}}},
+        {"$graphLookup": {"from": coll_name, "startWith": "$relationships.target_ids",
+                          "connectFromField": "relationships.target_ids", "connectToField": "_id",
+                          "as": "connections", "maxDepth": max_depth, "depthField": "depth"}},
+        {"$project": {"_id": 0, "original": {"_id": "$_id", "type": "$type", "attributes": "$attributes",
+                                             "relationships": "$relationships"}, "connections": 1}},
+        {"$project": {"combined": {"$concatArrays": [["$original"], "$connections"]}}},
+        {"$unwind": "$combined"},
+        {"$group": {"_id": "$combined._id", "entity": {"$first": "$combined"}}},
+        {"$replaceRoot": {"newRoot": "$entity"}},
+    ]
+
+
 def _expand(start: list[str], depth: int) -> list[dict]:
     if not start:
         return []
     # Salientes: $graphLookup (recorrido recursivo dentro de MongoDB).
-    out = get_store().related_entities(start, max_depth=depth)
+    out = list(db.coll(config.COLL_GRAPH).aggregate(related_pipeline(start, depth)))
     # Entrantes (1 salto): "quien usa X?" -> indice multikey sobre relationships.target_ids.
     incoming = list(db.coll(config.COLL_GRAPH).find({"relationships.target_ids": {"$in": start}}).limit(50))
     merged = {e["_id"]: e for e in out + incoming}

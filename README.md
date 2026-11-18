@@ -35,6 +35,7 @@ Repos de GitHub ─► grafo (librerías, endpoints, código) ─┼─► Mongo
 Además: un modelo de **embedding**, un **LLM para construir el grafo** y otro **para el chat** (por defecto, el mismo), tres modos de recuperación (`hybrid`, `vector`, `graph`) y tres fuentes: ficheros, carpeta o URLs de GitHub.
 
 ## Qué verás en pantalla
+- **Explicación**: dos mitades (ingesta arriba, consulta y recuperación abajo) con una caja por paso. Al pulsar una caja, a la derecha aparece la llamada real a MongoDB que hace la aplicación con tu configuración y tus datos, lista para copiar en MongoDB Compass (Aggregations, Find, Indexes…).
 - **Chat**: la respuesta cita sus fuentes y el panel derecho muestra el flujo (memoria, búsqueda híbrida, grafo, LLM, tokens) y, para cada fragmento recuperado, **cómo se encontró**: por significado (`vector #2`), por palabras exactas (`BM25 #1`) o por ambos.
 - **Grafo**: visor navegable (NetworkX calcula el layout; se dibuja en SVG). Zoom y arrastre; **filtros** por tipo de nodo y de relación (el código —ficheros, clases, funciones— va oculto por defecto); **clic** = ficha de la entidad (atributos, fuentes, relaciones salientes y entrantes clicables); **doble clic** = expandir o colapsar su vecindario sin perder lo que ya ves; búsqueda con autocompletado y **camino más corto entre dos entidades** (`$graphLookup`), sin distinguir si vienen de repos o de documentos.
 - **Configuración**: modelos, ingesta, recuperación, fuentes y estado de los índices de Atlas.
