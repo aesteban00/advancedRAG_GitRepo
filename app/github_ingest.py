@@ -201,8 +201,10 @@ def _tech(lib: str):
     return None
 
 
-def ingest_repo(url: str, user_id: str, visibility: str) -> dict:
+def ingest_repo(url: str, user_id: str, visibility: str, log=None) -> dict:
+    log = log or (lambda m: None)   # progreso visible en la interfaz (ver jobs.py)
     owner, repo = parse_repo_url(url)
+    log(f"Consultando la API de GitHub: {owner}/{repo}")
     rid, src, warnings = f"{owner}/{repo}", f"github:{owner}/{repo}", []
     meta = _gh(f"/repos/{owner}/{repo}")
     branch = meta.get("default_branch", "main")
@@ -210,6 +212,7 @@ def ingest_repo(url: str, user_id: str, visibility: str) -> dict:
     if tree.get("truncated"):
         warnings.append("El arbol del repo esta truncado: analisis parcial.")
     paths = [t["path"] for t in tree["tree"] if t["type"] == "blob"]
+    log(f"Árbol descargado: {len(paths)} ficheros")
     ok = lambda p: not any(s in p.lower() for s in SKIP)
 
     ents: dict[str, dict] = {}
@@ -256,10 +259,13 @@ def ingest_repo(url: str, user_id: str, visibility: str) -> dict:
     # Codigo: ficheros, endpoints, simbolos Python
     code = sorted((p for p in paths if p.endswith(CODE_EXT) and ok(p)), key=lambda p: p.count("/"))
     code = code[:config.GITHUB_MAX_FILES]
+    log(f"Analizando {len(code)} ficheros de código (sin LLM)")
     func_ids: dict[str, list[str]] = {}
     file_calls: list[tuple[str, str, list[str]]] = []
     literals: list[str] = []
-    for p in code:
+    for i, p in enumerate(code, 1):
+        if i % 25 == 0:
+            log(f"Código: {i}/{len(code)} ficheros")
         text = _raw(owner, repo, branch, p)
         if text is None:
             continue
@@ -300,13 +306,16 @@ def ingest_repo(url: str, user_id: str, visibility: str) -> dict:
         "topics": meta.get("topics") or [], "url": meta.get("html_url", ""),
         "stars": meta.get("stargazers_count", 0), "url_literals": uniq_lit,
         "endpoint_paths": [e["attributes"]["path"][0] for e in ends]}, rels))
+    log(f"Escribiendo {len(ents)} entidades en el grafo")
     graph_store.upsert_entities(list(ents.values()))
 
     # Documentacion: README + docs/*.md por la ingesta normal (chunks + grafo LLM)
     docs = [p for p in paths if re.match(r"^readme(\.\w+)?$", p.lower())]
     docs += [p for p in paths if p.startswith("docs/") and p.endswith(".md")]
     n_docs = n_chunks = 0
-    for p in docs[:config.GITHUB_MAX_DOCS]:
+    selected = docs[:config.GITHUB_MAX_DOCS]
+    for i, p in enumerate(selected, 1):
+        log(f"Documentación {i}/{len(selected)}: {p} (LLM: puede tardar, máx. {config.LLM_TIMEOUT_S}s por llamada)")
         text = _raw(owner, repo, branch, p)
         if not text:
             continue
@@ -320,7 +329,9 @@ def ingest_repo(url: str, user_id: str, visibility: str) -> dict:
         except Exception as exc:
             warnings.append(f"{p}: {exc}")
 
+    log("Relaciones entre repos…")
     link_repos()
+    log("Repo terminado")
     return {"repo": rid, "entities": len(ents), "docs": n_docs, "chunks": n_chunks, "warnings": warnings}
 
 

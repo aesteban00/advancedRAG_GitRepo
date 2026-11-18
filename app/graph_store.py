@@ -44,7 +44,9 @@ def get_store():
     if _store is None or key != _store_key:
         if not cfg["api_key"]:
             raise RuntimeError("Falta la API key del LLM de grafo (.env o Configuracion)")
-        model = ChatOpenAI(model=cfg["model"], api_key=cfg["api_key"], base_url=cfg["base_url"], temperature=0)
+        # timeout: una llamada que no responde no puede bloquear la ingesta para siempre.
+        model = ChatOpenAI(model=cfg["model"], api_key=cfg["api_key"], base_url=cfg["base_url"], temperature=0,
+                           timeout=config.LLM_TIMEOUT_S, max_retries=config.LLM_MAX_RETRIES)
         _store = MongoDBGraphStore(
             collection=db.coll(config.COLL_GRAPH),
             entity_extraction_model=model,

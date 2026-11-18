@@ -25,6 +25,7 @@ import traceback
 import chat
 import config
 import flow_store
+import jobs
 import github_ingest
 import graph_store
 import graph_view
@@ -91,11 +92,11 @@ def _check_visibility(v: str) -> None:
 @app.post("/ingest/files")
 async def ingest_files(files: list[UploadFile] = File(...), user_id: str = Form("demo-user"),
                        visibility: str = Form("public")):
-    """Fichero individual o carpeta (el navegador envia todos sus ficheros)."""
+    """Crea un trabajo en segundo plano y devuelve su job_id (progreso en GET /jobs/{id})."""
     _check_visibility(visibility)
     if len(files) > 50:
         raise HTTPException(400, "Maximo 50 ficheros por peticion.")
-    results, skipped, errors = [], [], []
+    items, skipped = [], []
     for f in files:
         name = f.filename or ""
         if not name.lower().endswith(loaders.SUPPORTED_EXTENSIONS):
@@ -103,11 +104,9 @@ async def ingest_files(files: list[UploadFile] = File(...), user_id: str = Form(
                 raise HTTPException(400, "Formato no soportado (usa .pdf, .md o .txt).")
             skipped.append(name)
             continue
-        try:
-            results.append(ingest.ingest_file(name, await f.read(), user_id, visibility))
-        except Exception as exc:
-            errors.append({"file": name, "error": str(exc)})
-    return {"results": results, "skipped": skipped, "errors": errors}
+        items.append((name, await f.read()))
+    jid = jobs.start("files", jobs.run_files, items, user_id, visibility)
+    return {"job_id": jid, "skipped": skipped}
 
 
 class GithubRequest(BaseModel):
@@ -121,13 +120,21 @@ def ingest_github(req: GithubRequest):
     _check_visibility(req.visibility)
     if not req.urls or len(req.urls) > 10:
         raise HTTPException(400, "Indica entre 1 y 10 URLs.")
-    results, errors = [], []
-    for url in req.urls:
+    for url in req.urls:  # valida el formato antes de lanzar nada
         try:
-            results.append(github_ingest.ingest_repo(url, req.user_id, req.visibility))
-        except Exception as exc:
-            errors.append({"file": url, "error": str(exc)})
-    return {"results": results, "skipped": [], "errors": errors}
+            github_ingest.parse_repo_url(url)
+        except ValueError as exc:
+            raise HTTPException(400, str(exc))
+    jid = jobs.start("github", jobs.run_github, req.urls, req.user_id, req.visibility)
+    return {"job_id": jid, "skipped": []}
+
+
+@app.get("/jobs/{job_id}")
+def get_job(job_id: str):
+    j = jobs.get(job_id)
+    if not j:
+        raise HTTPException(404, "Trabajo no encontrado (quiza el servidor se reinicio).")
+    return j
 
 
 def _settings_response() -> dict:

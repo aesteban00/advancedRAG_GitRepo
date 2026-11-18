@@ -89,6 +89,10 @@ GRAPH_RELATIONSHIP_TYPES = [
     "OWNED_BY", "CONTAINS", "DEFINES", "CALLS", "IMPORTS", "DOCUMENTS", "RELATED_TO",
 ]
 
+# Tiempo maximo por llamada al LLM y reintentos (evita ingestas colgadas indefinidamente).
+LLM_TIMEOUT_S = 120
+LLM_MAX_RETRIES = 2
+
 GITHUB_API = "https://api.github.com"
 GITHUB_RAW = "https://raw.githubusercontent.com"
 GITHUB_MAX_FILES = 150          # ficheros de codigo analizados por repo

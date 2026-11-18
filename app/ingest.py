@@ -36,6 +36,11 @@ def ingest_file(filename: str, data: bytes, user_id: str, visibility: str,
     if not chunks:
         raise ValueError("No se generaron fragmentos (documento sin texto?).")
 
+    # Idempotencia: si el mismo origen ya estaba indexado, sustituimos sus chunks
+    # (antes se duplicaban al volver a analizarlo).
+    for name in (config.COLL_AUTO, config.COLL_CONTEXT, config.COLL_MULTIMODAL):
+        db.coll(name).delete_many({"metadata.source": source})
+
     docs = [{"text": c["text"], "metadata": {
         "source": source, "source_type": source_type, "page": c["page"], "chunk_index": i,
         "model": model, "strategy": strategy, "owner": user_id, "visibility": visibility}}

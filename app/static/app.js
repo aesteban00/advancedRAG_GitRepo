@@ -504,15 +504,41 @@ function logIngest(data) {
   (data.skipped || []).forEach((f) => add("skip", "ignorado: " + f));
   (data.errors || []).forEach((e) => add("error", `${e.file}: ${e.error}`));
 }
-async function runIngest(btn, url, opts) {
+// Lanza una ingesta en segundo plano y muestra su progreso (GET /jobs/{id}).
+// Si se corta la conexion, se reintenta: el trabajo sigue en el servidor.
+async function runIngest(_btn, url, opts) {
   const log = $("ingest-log");
+  const line = (cls, text) => { const li = document.createElement("li"); li.className = cls; li.textContent = text; log.appendChild(li); return li; };
   log.replaceChildren();
-  const li = document.createElement("li");
-  li.textContent = "Procesando… (puede tardar: el LLM extrae el grafo)";
-  log.appendChild(li);
+  line("step", "Enviando…");
   document.querySelectorAll("#view-config button").forEach((b) => (b.disabled = true));
-  try { const data = await apiJson(url, opts); log.replaceChildren(); logIngest(data); }
-  catch (err) { log.replaceChildren(); logIngest({ results: [], errors: [{ file: "", error: err.message }] }); }
+  try {
+    const { job_id } = await apiJson(url, opts);
+    let job;
+    for (;;) {
+      await new Promise((r) => setTimeout(r, 2000));
+      try {
+        job = await apiJson("/jobs/" + job_id);
+      } catch (err) {
+        if (!(err instanceof TypeError)) throw err;          // error de red: reintentamos
+        line("warn", "Sin conexión con el servidor, reintentando…");
+        continue;
+      }
+      log.replaceChildren();
+      const details = document.createElement("details"); details.open = true;
+      details.appendChild(Object.assign(document.createElement("summary"), { textContent: `Progreso (${job.status === "running" ? "en curso" : job.status})` }));
+      const pre = document.createElement("pre"); pre.className = "job-log"; pre.textContent = job.log.join("\n");
+      details.appendChild(pre); log.appendChild(details);
+      pre.scrollTop = pre.scrollHeight;
+      if (job.status !== "running") break;
+    }
+    if (job.status === "error") throw new Error(job.error);
+    const done = job.result || { results: [], errors: [] };
+    if (job.status === "done") { line("ok", "Completado"); }
+    logIngest(done);
+  } catch (err) {
+    line("error", "Error: " + (err.message || err));
+  }
   document.querySelectorAll("#view-config button").forEach((b) => (b.disabled = false));
   loadDocuments(); loadStatus(); loadOverviewGraph();
 }

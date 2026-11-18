@@ -34,7 +34,8 @@ def _llm(role: str = "chat") -> OpenAI:
         raise RuntimeError(f"Falta la API key del LLM de {role} (.env o Configuracion)")
     if not cfg["model"]:
         raise RuntimeError("Falta el modelo de chat (CHAT_LLM_MODEL en .env o Configuracion)")
-    return OpenAI(api_key=cfg["api_key"], base_url=cfg["base_url"])
+    return OpenAI(api_key=cfg["api_key"], base_url=cfg["base_url"],
+                  timeout=config.LLM_TIMEOUT_S, max_retries=config.LLM_MAX_RETRIES)
 
 
 def _usage(response) -> dict:
