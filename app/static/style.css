@@ -400,3 +400,6 @@ code { background: #f1f4f3; padding: 0 4px; border-radius: 4px; font-size: 0.85e
 .user-new input { flex: 1; min-width: 0; }
 .user-new .btn { padding: 6px 10px; }
 #user-msg { margin: 6px 0 0; font-size: 0.72rem; color: #b42318; }
+
+.admin-note { margin: 8px 0 0; padding: 6px 10px; font-size: 0.72rem; background: #fff4d6; border: 1px solid #ffc010; border-radius: 8px; color: #6b4a00; }
+.admin-note[hidden] { display: none; }

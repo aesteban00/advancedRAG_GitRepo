@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from contextlib import asynccontextmanager
 
-from fastapi import Body, FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import Body, FastAPI, Header, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -25,6 +25,11 @@ import traceback
 import chat
 import config
 import flow_store
+import hmac
+import time
+from datetime import datetime, timezone
+
+import db
 import jobs
 import removal
 import github_ingest
@@ -65,9 +70,34 @@ def index():
 
 
 # Ruta de configuracion: le dice a la UI que funciones estan disponibles.
+def _actor(user_id: str, token: str | None) -> bool:
+    """Devuelve si quien llama actua como administrador. El nombre "admin" esta RESERVADO: sin la
+    contrasena correcta (cabecera X-Admin-Token) se rechaza, para que nadie se haga pasar por el."""
+    if user_id != config.ADMIN_USER:
+        return False
+    if not config.ADMIN_TOKEN:
+        raise HTTPException(403, "El modo administrador esta desactivado (falta ADMIN_TOKEN en el .env).")
+    if not token or not hmac.compare_digest(token, config.ADMIN_TOKEN):
+        time.sleep(0.5)   # frena los intentos por fuerza bruta
+        raise HTTPException(403, "Contrasena de administrador incorrecta.")
+    return True
+
+
+class AdminLogin(BaseModel):
+    token: str
+
+
+@app.post("/admin/login")
+def admin_login(req: AdminLogin):
+    """Comprueba la contrasena de administrador (sin efectos). La UI la guarda solo en la sesion del navegador."""
+    _actor(config.ADMIN_USER, req.token)
+    return {"ok": True}
+
+
 @app.get("/config")
 def config_endpoint():
-    return {"memory_available": memory.is_configured()}
+    return {"memory_available": memory.is_configured(), "admin_enabled": bool(config.ADMIN_TOKEN),
+            "admin_user": config.ADMIN_USER}
 
 
 # Esquema de la peticion del chat.
@@ -101,8 +131,9 @@ def _check_visibility(v: str) -> None:
 
 @app.post("/ingest/files")
 async def ingest_files(files: list[UploadFile] = File(...), user_id: str = Form("demo-user"),
-                       visibility: str = Form("public")):
+                       visibility: str = Form("public"), x_admin_token: str | None = Header(None)):
     """Crea un trabajo en segundo plano y devuelve su job_id (progreso en GET /jobs/{id})."""
+    _actor(user_id, x_admin_token)
     _check_visibility(visibility)
     if len(files) > 50:
         raise HTTPException(400, "Maximo 50 ficheros por peticion.")
@@ -126,7 +157,8 @@ class GithubRequest(BaseModel):
 
 
 @app.post("/ingest/github")
-def ingest_github(req: GithubRequest):
+def ingest_github(req: GithubRequest, x_admin_token: str | None = Header(None)):
+    _actor(req.user_id, x_admin_token)
     _check_visibility(req.visibility)
     if not req.urls or len(req.urls) > 10:
         raise HTTPException(400, "Indica entre 1 y 10 URLs.")
@@ -150,11 +182,19 @@ class DeleteRequest(BaseModel):
 
 
 @app.post("/documents/delete")
-def delete_documents(req: DeleteRequest):
-    """Elimina ficheros y repos (chunks + lo que solo ellos aportaron al grafo). Solo el propietario."""
+def delete_documents(req: DeleteRequest, x_admin_token: str | None = Header(None)):
+    """Elimina ficheros y repos (chunks + lo que solo ellos aportaron al grafo). Solo el propietario;
+    el administrador (X-Admin-Token) tambien lo PUBLICO de cualquier usuario."""
+    is_admin = _actor(req.user_id, x_admin_token)
     if not 1 <= len(req.items) <= 100:
         raise HTTPException(400, "Indica entre 1 y 100 elementos.")
-    return {"results": removal.delete_items([i.model_dump() for i in req.items], req.user_id)}
+    results = removal.delete_items([i.model_dump() for i in req.items], req.user_id, is_admin)
+    try:  # auditoria en MongoDB: quien elimino que y cuando
+        db.coll(config.COLL_AUDIT).insert_one({"at": datetime.now(timezone.utc), "actor": req.user_id, "admin": is_admin,
+                                               "results": results})
+    except Exception as exc:  # la auditoria no debe romper el borrado
+        print(f"[aviso] no se pudo registrar la auditoria: {exc}")
+    return {"results": results}
 
 
 @app.get("/jobs/{job_id}")

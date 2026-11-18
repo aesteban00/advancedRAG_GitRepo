@@ -12,27 +12,53 @@ const NEW_USER = "__new__";
 const USER_RE = /^[A-Za-z0-9][A-Za-z0-9_.@-]{0,39}$/;
 const knownUsers = new Map();   // user_id -> {files, repos, sessions}, viene de GET /users
 let activeUser = localStorage.getItem("user_id") || "demo-user";
+// Administrador: el usuario reservado "admin" puede eliminar lo PUBLICO de cualquiera. La contrasena se comprueba
+// en el servidor; aqui solo se guarda en la sesion del navegador (sessionStorage) y se envia como cabecera.
+const ADMIN = "admin";
+let adminEnabled = false;
+const adminToken = () => sessionStorage.getItem("admin_token") || "";
+const isAdmin = () => activeUser === ADMIN && !!adminToken();
+const adminHeaders = () => (isAdmin() ? { "X-Admin-Token": adminToken() } : {});
+if (activeUser === ADMIN && !adminToken()) activeUser = "demo-user";   // sin sesion de admin no se arranca como admin
 const savedUsers = () => { try { return JSON.parse(localStorage.getItem("known_users") || "[]"); } catch (e) { return []; } };
 const rememberUser = (u) => localStorage.setItem("known_users", JSON.stringify([...new Set([...savedUsers(), u])]));
 
 function renderUserSelect() {
   userInput.replaceChildren();
   // Usuarios con datos (servidor) + creados aqui aunque aun no tengan datos + el activo.
-  for (const u of [...new Set([...knownUsers.keys(), ...savedUsers(), activeUser])].sort()) {
+  for (const u of [...new Set([...knownUsers.keys(), ...savedUsers(), activeUser])].filter((x) => x !== ADMIN).sort()) {
     const s = knownUsers.get(u);
     userInput.add(new Option(s ? `${u} · ${s.files} docs · ${s.repos} repos` : `${u} · (nuevo)`, u));
   }
+  if (adminEnabled) userInput.add(new Option("admin · administrador", ADMIN));
   userInput.add(new Option("+ Nuevo usuario…", NEW_USER));
   userInput.value = activeUser;
+  document.getElementById("admin-note").hidden = !isAdmin();
 }
 async function loadUsers() {
+  try { adminEnabled = !!(await (await fetch("/config")).json()).admin_enabled; } catch (e) { /* sin servidor */ }
   try {
     const list = await (await fetch("/users")).json();
     if (Array.isArray(list)) { knownUsers.clear(); list.forEach((u) => knownUsers.set(u.user_id, u)); }
   } catch (e) { /* sin servidor: se usan los recordados */ }
   renderUserSelect();
 }
+function showAdminLogin(show) {
+  document.getElementById("admin-login").hidden = !show;
+  document.getElementById("user-msg").textContent = "";
+  if (show) { document.getElementById("user-new").hidden = true; const i = document.getElementById("admin-pass"); i.value = ""; i.focus(); }
+}
+async function adminLogin() {
+  const token = document.getElementById("admin-pass").value;
+  try {
+    const res = await fetch("/admin/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token }) });
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).detail || res.statusText);
+    sessionStorage.setItem("admin_token", token);
+    showAdminLogin(false); switchUser(ADMIN);
+  } catch (err) { document.getElementById("user-msg").textContent = err.message; }
+}
 function showNewUser(show) {
+  if (show) document.getElementById("admin-login").hidden = true;
   document.getElementById("user-new").hidden = !show;
   document.getElementById("user-msg").textContent = "";
   if (show) { const i = document.getElementById("user-new-name"); i.value = ""; i.focus(); }
@@ -41,6 +67,7 @@ function showNewUser(show) {
 function switchUser(u) { activeUser = u; renderUserSelect(); saveIds(); loadDocuments(); openThread(newThreadId()); }
 function createUser() {
   const name = document.getElementById("user-new-name").value.trim();
+  if (name.toLowerCase() === ADMIN) { document.getElementById("user-msg").textContent = "«admin» es un nombre reservado."; return; }
   if (!USER_RE.test(name)) {
     document.getElementById("user-msg").textContent = "Usa 1-40 caracteres: letras, números, _ . @ - (empezando por letra o número).";
     return;
@@ -49,7 +76,14 @@ function createUser() {
 }
 userInput.addEventListener("change", () => {
   if (userInput.value === NEW_USER) { userInput.value = activeUser; showNewUser(true); return; }
-  showNewUser(false); switchUser(userInput.value);
+  if (userInput.value === ADMIN && !isAdmin()) { userInput.value = activeUser; showAdminLogin(true); return; }   // pide la contrasena
+  showNewUser(false); showAdminLogin(false); switchUser(userInput.value);
+});
+document.getElementById("admin-ok").addEventListener("click", adminLogin);
+document.getElementById("admin-cancel").addEventListener("click", () => showAdminLogin(false));
+document.getElementById("admin-pass").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") { e.preventDefault(); adminLogin(); }
+  if (e.key === "Escape") showAdminLogin(false);
 });
 document.getElementById("user-new-ok").addEventListener("click", createUser);
 document.getElementById("user-new-cancel").addEventListener("click", () => showNewUser(false));
@@ -93,7 +127,8 @@ let docs = { public: [], private: [] };
 // Elementos marcados para borrar: claves "kind\u0001source".
 const selected = new Set();
 const docKey = (d) => `${d.kind || "file"}\u0001${d.source}`;
-const isMine = (d) => d.owner === currentUser();   // el servidor tambien lo comprueba
+// Se puede eliminar lo propio; el administrador, ademas, lo PUBLICO de cualquiera. El servidor lo vuelve a comprobar.
+const isMine = (d) => d.owner === currentUser() || (isAdmin() && d.visibility === "public");
 
 function updateDeleteButton() {
   const n = selected.size;
@@ -124,7 +159,8 @@ function renderDocuments() {
     cb.type = "checkbox";
     cb.checked = selected.has(docKey(d));
     cb.disabled = !isMine(d);
-    if (cb.disabled) cb.title = `Solo su propietario (${d.owner}) puede eliminarlo: cambia el usuario`;
+    if (cb.disabled) cb.title = isAdmin() ? "Es privado: solo su propietario puede eliminarlo"
+                                          : `Solo su propietario (${d.owner}) puede eliminarlo: cambia el usuario`;
     cb.addEventListener("change", () => {
       cb.checked ? selected.add(docKey(d)) : selected.delete(docKey(d));
       updateDeleteButton();
@@ -149,14 +185,16 @@ async function deleteSelected() {
   const items = [...selected].map((k) => { const [kind, source] = k.split("\u0001"); return { kind, source }; });
   if (!items.length) return;
   const names = items.map((i) => (i.kind === "repo" ? "[repo] " : "") + i.source).join("\n");
-  if (!confirm(`¿Eliminar ${items.length} elemento(s)?\n\n${names}\n\nSe borran sus fragmentos y lo que solo ellos aportaron al grafo. No se puede deshacer.`)) return;
+  const others = isAdmin() ? [...docs.public, ...docs.private].filter((d) => selected.has(docKey(d)) && d.owner !== ADMIN).length : 0;
+  const warn = others ? `\n\nATENCIÓN: ${others} elemento(s) pertenecen a OTROS usuarios (modo administrador).` : "";
+  if (!confirm(`¿Eliminar ${items.length} elemento(s)?\n\n${names}${warn}\n\nSe borran sus fragmentos y lo que solo ellos aportaron al grafo. No se puede deshacer.`)) return;
   const status = document.getElementById("doc-status");
   const btn = document.getElementById("doc-delete");
   btn.disabled = true;
   status.className = "doc-status"; status.textContent = "Eliminando…";
   try {
     const { results } = await apiJson("/documents/delete", {
-      method: "POST", headers: { "Content-Type": "application/json" },
+      method: "POST", headers: { "Content-Type": "application/json", ...adminHeaders() },
       body: JSON.stringify({ items, user_id: currentUser() }),
     });
     const ok = results.filter((r) => !r.error), bad = results.filter((r) => r.error);
@@ -707,12 +745,12 @@ $("ingest-files").addEventListener("click", () => {
   // webkitRelativePath: el navegador sube todos los ficheros de la carpeta.
   files.forEach((f) => fd.append("files", f, f.webkitRelativePath || f.name));
   fd.append("user_id", currentUser()); fd.append("visibility", visibility);
-  runIngest($("ingest-files"), "/ingest/files", { method: "POST", body: fd });
+  runIngest($("ingest-files"), "/ingest/files", { method: "POST", body: fd, headers: adminHeaders() });
 });
 $("ingest-github").addEventListener("click", () => {
   const urls = $("repo-urls").value.split("\n").map((u) => u.trim()).filter(Boolean);
   if (!urls.length) return;
-  runIngest($("ingest-github"), "/ingest/github", { method: "POST", headers: { "Content-Type": "application/json" },
+  runIngest($("ingest-github"), "/ingest/github", { method: "POST", headers: { "Content-Type": "application/json", ...adminHeaders() },
     body: JSON.stringify({ urls, user_id: currentUser(), visibility }) });
 });
 

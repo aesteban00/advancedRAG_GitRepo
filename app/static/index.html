@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Motor Cognitivo (KB) · MongoDB Atlas</title>
-  <link rel="stylesheet" href="/static/style.css?v=32" />
+  <link rel="stylesheet" href="/static/style.css?v=33" />
 </head>
 <body>
   <!-- Barra superior (estilo consola Atlas) -->
@@ -36,7 +36,14 @@
           <button type="button" id="user-new-ok" class="btn primary">Crear</button>
           <button type="button" id="user-new-cancel" class="btn" title="Cancelar">×</button>
         </div>
+        <!-- Acceso de administrador: contrasena comprobada en el servidor (ADMIN_TOKEN) -->
+        <div id="admin-login" class="user-new" hidden>
+          <input type="password" id="admin-pass" placeholder="contraseña de administrador" autocomplete="off" />
+          <button type="button" id="admin-ok" class="btn primary">Entrar</button>
+          <button type="button" id="admin-cancel" class="btn" title="Cancelar">×</button>
+        </div>
         <p id="user-msg" class="status"></p>
+        <p id="admin-note" class="admin-note" hidden>Modo administrador: puedes eliminar documentos y repos <b>públicos</b> de cualquier usuario.</p>
       </div>
 
       <div class="nav-title">SESIONES</div>
@@ -206,7 +213,7 @@
     </main>
   </div>
 
-  <script src="/static/graph.js?v=32"></script>
-  <script src="/static/app.js?v=32"></script>
+  <script src="/static/graph.js?v=33"></script>
+  <script src="/static/app.js?v=33"></script>
 </body>
 </html>

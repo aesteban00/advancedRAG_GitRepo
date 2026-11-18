@@ -46,11 +46,19 @@ El **usuario** del panel izquierdo es una etiqueta (sin contraseña) que separa 
 - Cambiar de usuario abre una sesión de chat nueva y recarga la lista de documentos. Para eliminar algo hay que ser su propietario: cambia al usuario que lo subió.
 - API: `GET /users`.
 
+## Administrador
+El usuario reservado **`admin`** puede eliminar los documentos y repos **públicos** de cualquier usuario (nunca los privados de otros). Los demás usuarios son solo etiquetas sin contraseña, así que `admin` se protege con una contraseña que se comprueba **en el servidor**:
+1. Define `ADMIN_TOKEN` en el `.env` (genera una con `python3 -c "import secrets; print(secrets.token_urlsafe(24))"`). Si está vacía, el modo admin queda desactivado.
+2. En el desplegable de usuario elige **admin · administrador** e introduce la contraseña. Se guarda solo en la sesión del navegador (`sessionStorage`) y se envía como cabecera `X-Admin-Token`; se pierde al cerrar la pestaña.
+3. Aparece un aviso de modo administrador y las casillas de lo público de otros quedan habilitadas. Al confirmar, la interfaz avisa de que vas a eliminar elementos de otros usuarios.
+
+El nombre `admin` está reservado: no se puede crear como usuario normal y el servidor rechaza cualquier acción de `admin` sin la contraseña correcta. Cada borrado (también los denegados) queda registrado en la colección `audit_log` de MongoDB: quién, cuándo y qué.
+
 ## Eliminar documentos y repos
 En la lista **Documentos** del panel izquierdo cada elemento tiene una casilla. Márcalos (o usa *Todos*) y pulsa **Eliminar (N)**; la interfaz pide confirmación porque no se puede deshacer.
 - Se borran sus fragmentos de las tres colecciones (con `autoEmbed`, Atlas retira solo los vectores) y **lo que solo ellos aportaron al grafo**. Si una entidad viene de varias fuentes (p. ej. una organización citada en dos documentos) se conserva mientras le quede alguna; las relaciones que apuntaban a entidades eliminadas se limpian.
 - Un repo se elimina entero: su grafo, su README y sus `docs/`. Un repo de nombre parecido (`acme/api-v2` frente a `acme/api`) no se toca.
-- Solo puede eliminar su **propietario**: los elementos de otros usuarios aparecen con la casilla bloqueada (cambia el usuario si los subiste tú con otro nombre).
+- Solo puede eliminar su **propietario**: los elementos de otros usuarios aparecen con la casilla bloqueada (cambia el usuario si los subiste tú con otro nombre). La excepción es el **administrador** (ver abajo).
 - Límite: los atributos y relaciones de una entidad que se conserva no se atribuyen a una fuente concreta, así que permanecen. Para un grafo limpio al 100 %, vuelve a ingerir lo que quede.
 - API: `POST /documents/delete` con `{"items": [{"kind": "file" | "repo", "source": "..."}], "user_id": "..."}`.
 
@@ -150,6 +158,7 @@ scripts/worktree.sh mi-mejora 8091   # crea ../advancedRAG_mi_mejora con su .env
 | `VOYAGE_API_KEY` | Embeddings de las estrategias manuales y de la memoria |
 | `MONGODB_URI` | Conexión a Atlas (la app y la memoria usan el mismo cluster) |
 | `MONGODB_DATABASE` / `MEMORY_MONGODB_DATABASE` | BBDD de la app y de la memoria. **Las fija el sistema según la rama** (ver *Ramas* abajo): `main` usa `graphrag_demo`; cada rama nueva usa `<rama>` y `<rama>_memory` |
+| `ADMIN_TOKEN` | (Opcional) Contraseña del usuario reservado `admin`, que puede eliminar documentos y repos públicos de cualquier usuario. Vacía = modo admin desactivado |
 | `GITHUB_TOKEN` | (Opcional) sube el límite de GitHub de 60 a 5000 peticiones/h |
 | `AGENTIC_MEMORY_PROJECT_ID` | Proyecto de Agent Engine donde vive la memoria |
 | `AGENTIC_MEMORY_CLIENT_ID` / `AGENTIC_MEMORY_CLIENT_SECRET` | Service account que la app usa para hablar con la memoria |

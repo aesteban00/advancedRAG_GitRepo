@@ -80,7 +80,7 @@ def ensure_auto_index(model: str) -> str:
 def ensure_indexes() -> None:
     database = db.get_db()
     for n in (config.COLL_AUTO, config.COLL_CONTEXT, config.COLL_MULTIMODAL,
-              config.COLL_GRAPH, config.COLL_FLOWS, config.COLL_SETTINGS):
+              config.COLL_GRAPH, config.COLL_FLOWS, config.COLL_SETTINGS, config.COLL_AUDIT):
         _ensure_collection(database, n)
 
     for coll_name, idx in ((config.COLL_CONTEXT, config.VECTOR_INDEX_CONTEXT),

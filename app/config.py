@@ -41,6 +41,13 @@ MONGODB_URI = os.getenv("MONGODB_URI")
 # ------------------------- GitHub (opcional) -------------------------
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
 
+# ------------------------- Administrador -------------------------
+# El usuario "admin" puede eliminar documentos y repos PUBLICOS de cualquier usuario. Los usuarios del resto
+# de la app son solo etiquetas (sin contrasena), asi que "admin" exige esta contrasena en el servidor.
+# Si ADMIN_TOKEN esta vacio, el modo administrador queda desactivado.
+ADMIN_USER = "admin"
+ADMIN_TOKEN = os.getenv("ADMIN_TOKEN")
+
 # ------------------------- Atlas Agent Engine Memory -------------------------
 # Servicio alojado: project_id + client id/secret del service account.
 # Para desarrollo local se puede usar AGENTIC_MEMORY_BASE_URL y dejar lo demas vacio.
@@ -64,6 +71,7 @@ COLL_MULTIMODAL = "chunks_multimodal"  # voyage-multimodal (texto + imagen)
 COLL_GRAPH = "knowledge_graph"         # entidades + relaciones (MongoDBGraphStore)
 COLL_FLOWS = "request_flows"
 COLL_SETTINGS = "app_settings"
+COLL_AUDIT = "audit_log"                # quien elimino que y cuando
 
 VECTOR_INDEX_CONTEXT = "idx_vector_context"
 VECTOR_INDEX_MULTIMODAL = "idx_vector_multimodal"
