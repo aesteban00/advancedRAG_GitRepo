@@ -305,6 +305,7 @@ def ingest_repo(url: str, user_id: str, visibility: str, log=None) -> dict:
         "description": meta.get("description") or "", "language": meta.get("language") or "",
         "topics": meta.get("topics") or [], "url": meta.get("html_url", ""),
         "stars": meta.get("stargazers_count", 0), "url_literals": uniq_lit,
+        "visibility": visibility, "owner_user": user_id,   # para listarlo en Publicos/Privados
         "endpoint_paths": [e["attributes"]["path"][0] for e in ends]}, rels))
     log(f"Escribiendo {len(ents)} entidades en el grafo")
     graph_store.upsert_entities(list(ents.values()))

@@ -53,7 +53,9 @@ function renderDocuments() {
   }
   for (const d of items) {
     const li = document.createElement("li");
-    li.textContent = `${d.source} · ${d.chunks} chunks · subido por ${d.owner}`;
+    li.textContent = d.kind === "repo"
+      ? `${d.source} · repo GitHub${d.language ? " · " + d.language : ""} · ${d.chunks} chunks de docs · por ${d.owner}`
+      : `${d.source} · ${d.chunks} chunks · subido por ${d.owner}`;
     list.appendChild(li);
   }
 }

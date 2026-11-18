@@ -7,6 +7,8 @@
 
 from __future__ import annotations
 
+import re
+
 from pymongo.errors import OperationFailure
 
 import config
@@ -86,9 +88,29 @@ def search(query: str, user_id: str, top_k: int) -> list[dict]:
     return results
 
 
+def _repo_items(user_id: str) -> list[dict]:
+    """Repos de GitHub visibles para el usuario (nodos Repository del grafo) con sus chunks de documentacion."""
+    vis = {"$or": [{"attributes.visibility": "public"}, {"attributes.owner_user": user_id}]}
+    coll = db.coll(config.COLL_GRAPH)
+    out = []
+    for r in coll.find({"type": "Repository", "attributes.sources": {"$regex": "^github:"}, **vis}):
+        rid = r["_id"]
+        if rid.count("/") != 1:
+            continue
+        attrs = r.get("attributes", {})
+        chunks = sum(db.coll(n).count_documents({"metadata.source": {"$regex": f"^{re.escape(rid)}/"}})
+                     for n in (config.COLL_AUTO, config.COLL_CONTEXT, config.COLL_MULTIMODAL))
+        out.append({"source": rid, "kind": "repo", "owner": (attrs.get("owner_user") or ["?"])[0],
+                    "visibility": (attrs.get("visibility") or ["public"])[0],
+                    "strategy": "github", "chunks": chunks,
+                    "language": (attrs.get("language") or [""])[0], "url": (attrs.get("url") or [""])[0]})
+    return out
+
+
 def list_documents(user_id: str) -> dict:
+    # Los chunks de README/docs de repos se listan dentro de su repo, no como documentos sueltos.
     pipeline = [
-        {"$match": _visibility_filter(user_id)},
+        {"$match": {**_visibility_filter(user_id), "metadata.source_type": {"$ne": "github"}}},
         {"$group": {"_id": {"source": "$metadata.source", "owner": "$metadata.owner",
                             "visibility": "$metadata.visibility", "strategy": "$metadata.strategy"},
                     "chunks": {"$sum": 1}}},
@@ -96,6 +118,9 @@ def list_documents(user_id: str) -> dict:
     docs = []
     for n in (config.COLL_AUTO, config.COLL_CONTEXT, config.COLL_MULTIMODAL):
         docs += [{**r["_id"], "chunks": r["chunks"]} for r in db.coll(n).aggregate(pipeline)]
+    for d in docs:
+        d.setdefault("kind", "file")
+    docs += _repo_items(user_id)
     docs.sort(key=lambda d: d["source"] or "")
     return {"public": [d for d in docs if d["visibility"] == "public"],
             "private": [d for d in docs if d["visibility"] == "private" and d["owner"] == user_id]}
