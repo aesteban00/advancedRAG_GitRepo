@@ -107,6 +107,11 @@ uvicorn app.main:app --reload --port 8090
 ```
 Hasta completar el perfil, la app arranca con la memoria desactivada. El hook se activa una vez por clon con `git config core.hooksPath .githooks`.
 
+Para tener varias ramas en marcha a la vez, cada una en su carpeta y su puerto:
+```bash
+scripts/worktree.sh mi-mejora 8091   # crea ../advancedRAG_mi_mejora con su .env y su BBDD
+```
+
 ## Variables del `.env`
 | Variable | Para qué sirve |
 |---|---|
