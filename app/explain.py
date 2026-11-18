@@ -10,6 +10,8 @@
 
 from __future__ import annotations
 
+import os
+import re
 from datetime import datetime, timezone
 
 import config
@@ -30,6 +32,46 @@ INDEX_BY_STRATEGY = {"auto_embed": None, "voyage_context": config.VECTOR_INDEX_C
 def _step(id, lane, title, summary, kind, collection=None, code=None, note="", runnable=False):
     return {"id": id, "lane": lane, "title": title, "summary": summary, "kind": kind,
             "db": config.MONGODB_DB, "collection": collection, "code": code, "note": note, "runnable": runnable}
+
+
+# Script(s) donde se implementa cada paso (los que se muestran en el panel de detalle).
+STEP_FILES = {
+    "ingest-load": ["app/loaders.py"],
+    "ingest-store": ["app/ingest.py"],
+    "ingest-embed": ["app/ingest.py", "app/embeddings.py"],
+    "ingest-index": ["app/setup_indexes.py"],
+    "ingest-graph-llm": ["app/graph_store.py"],
+    "ingest-github": ["app/github_ingest.py"],
+    "query-memory": ["app/memory.py"],
+    "query-search": ["app/vector_search.py"],
+    "query-graph-entities": ["app/graph_store.py"],
+    "query-graph-traverse": ["app/graph_store.py"],
+    "query-graph-incoming": ["app/graph_store.py"],
+    "query-answer": ["app/chat.py"],
+    "query-record": ["app/flow_store.py"],
+}
+
+# Lineas que llaman a MongoDB: driver/pymongo, colecciones, operaciones, operadores $ y _id.
+MONGO_RE = re.compile(
+    r"db\.coll|get_db\(|\bCOLL_\w+|CHUNK_COLLECTIONS|MongoClient|pymongo|MongoDBGraphStore|UpdateOne|OperationFailure|"
+    r"\.aggregate\(|\.find\(|find_one\(|\.find_one\(|insert_many|insert_one|update_one|update_many|update_search_index|"
+    r"replace_one|delete_many|delete_one|count_documents|estimated_document_count|bulk_write|create_search_index|"
+    r"create_index|list_search_indexes|list_collection_names|create_collection|\.distinct\(|\$[a-zA-Z]+|\b_id\b|ObjectId|"
+    r"\.limit\(|\.sort\(")
+
+
+def source_view(path: str) -> dict:
+    """Codigo de un script de app/ con cada linea marcada si llama a MongoDB. Solo ficheros de app/*.py."""
+    root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+    allowed = {f"app/{n}" for n in os.listdir(os.path.join(root, "app")) if n.endswith(".py")}
+    if path not in allowed:
+        raise ValueError("Fichero no permitido.")
+    with open(os.path.join(root, path), encoding="utf-8") as f:
+        lines = f.read().splitlines()
+    # Los comentarios se muestran en gris aunque mencionen operadores (p. ej. "$vectorSearch" en una nota).
+    out = [{"n": i, "text": t, "mongo": bool(MONGO_RE.search(t)) and not t.lstrip().startswith("#")}
+           for i, t in enumerate(lines, 1)]
+    return {"path": path, "mongo_lines": sum(1 for x in out if x["mongo"]), "lines": out}
 
 
 def _status(user_id: str) -> dict:
@@ -165,4 +207,6 @@ def catalog(user_id: str, question: str) -> dict:
               "created_at": datetime.now(timezone.utc).isoformat()},
         note="Insert desde la app. Sirve también para ver el historial en Compass."))
 
+    for step in ingest + query:
+        step["files"] = STEP_FILES.get(step["id"], [])
     return {"status": _status(user_id), "question": question, "ingest": ingest, "query": query}

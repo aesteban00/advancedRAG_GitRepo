@@ -135,6 +135,16 @@ def explain_catalog(user_id: str = "demo-user", question: str = ""):
         raise _http_error(exc)
 
 
+@app.get("/explain/source")
+def explain_source(path: str):
+    """Codigo fuente de un script de app/ para el pop-up de la pestaña Explicacion (solo app/*.py)."""
+    try:
+        import explain
+        return explain.source_view(path)
+    except Exception as exc:
+        raise _http_error(exc)
+
+
 @app.get("/documents")
 def list_documents(user_id: str = "demo-user"):
     """PDFs publicos + privados del usuario indicado."""

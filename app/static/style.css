@@ -482,3 +482,18 @@ body.side-dragging, body.side-dragging * { user-select: none; cursor: col-resize
 .modal-body { padding: 14px 18px; overflow: auto; }
 .modal-body h3 { margin: 12px 0 6px; font-size: 0.85rem; }
 .modal-body pre.code { max-height: none; white-space: pre-wrap; }
+
+/* ---- Pestaña Explicación: scripts y pop-up de código ---- */
+.files { margin: 10px 0 4px; }
+.files-title { font-size: 0.7rem; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; margin-bottom: 4px; }
+.file-chip { display: block; width: 100%; text-align: left; margin-top: 4px; padding: 6px 10px; border: 1px solid var(--green); border-radius: 8px; background: #e3fcf7; color: var(--green-dark); font: 600 0.78rem ui-monospace, Menlo, monospace; cursor: pointer; word-break: break-all; }
+.file-chip:hover { background: #cdf6e8; }
+.code-box { width: min(1100px, 100%); }
+.code-legend { margin: 0; padding: 8px 18px 0; font-size: 0.74rem; display: flex; gap: 16px; flex-wrap: wrap; }
+.lg-grey { color: #6b7b79; } .lg-mongo { color: #0e8a5f; font-weight: 600; }
+.code-body { margin: 10px 18px 18px; background: #0f1f24; border-radius: 10px; padding: 8px 0; overflow: auto; max-height: 70vh; font: 12px/1.5 ui-monospace, Menlo, monospace; }
+.code-body .cl { display: flex; white-space: pre; color: #6b7b79; padding-right: 14px; }
+.code-body .cl .n { flex: 0 0 52px; text-align: right; padding-right: 12px; color: #3d4f4d; user-select: none; }
+.code-body .cl .t { flex: 1; }
+.code-body .cl.mg { color: #7cf5c8; background: rgba(124, 245, 200, .13); box-shadow: inset 3px 0 0 #7cf5c8; font-weight: 600; }
+.code-body .cl.mg .n { color: #7cf5c8; }

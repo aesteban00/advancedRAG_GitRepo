@@ -60,6 +60,32 @@ function renderLane(id, steps) {
   }
 }
 
+// Pop-up con el codigo de un script: gris = codigo, verde = lineas que llaman a MongoDB.
+async function openCode(path) {
+  const box = document.getElementById("code-body");
+  const title = document.getElementById("code-title");
+  box.replaceChildren();
+  title.textContent = path;
+  document.getElementById("code-modal").hidden = false;
+  document.getElementById("code-close").focus();
+  try {
+    const src = await apiJson("/explain/source?path=" + encodeURIComponent(path));
+    title.textContent = `${src.path} · ${src.mongo_lines} líneas de MongoDB`;
+    let first = null;
+    for (const l of src.lines) {
+      const row = exEl("div", "cl" + (l.mongo ? " mg" : ""));
+      row.append(exEl("span", "n", String(l.n)), exEl("span", "t", l.text || " "));
+      box.appendChild(row);
+      if (l.mongo && !first) first = row;
+    }
+    if (first && first.scrollIntoView) first.scrollIntoView({ block: "center" });
+  } catch (err) { box.textContent = "Error: " + err.message; }
+}
+const closeCode = () => { document.getElementById("code-modal").hidden = true; };
+document.getElementById("code-close").addEventListener("click", closeCode);
+document.getElementById("code-modal").addEventListener("click", (e) => { if (e.target.id === "code-modal") closeCode(); });
+document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !document.getElementById("code-modal").hidden) closeCode(); });
+
 function showDetail(s) {
   const d = document.getElementById("explain-detail");
   d.replaceChildren();
@@ -67,6 +93,17 @@ function showDetail(s) {
   d.appendChild(exEl("span", `kind ${s.kind}`, s.kind));
   d.appendChild(exEl("h2", "", s.title));
   d.appendChild(exEl("p", "", s.summary));
+  if (s.files && s.files.length) {
+    const fw = exEl("div", "files");
+    fw.appendChild(exEl("div", "files-title", "Script" + (s.files.length > 1 ? "s" : "") + " (pulsa para ver el código)"));
+    for (const f of s.files) {
+      const b = exEl("button", "file-chip", f);
+      b.type = "button";
+      b.addEventListener("click", () => openCode(f));
+      fw.appendChild(b);
+    }
+    d.appendChild(fw);
+  }
   const meta = exEl("dl", "meta");
   const row = (k, v) => { if (v) meta.append(exEl("dt", "", k), exEl("dd", "", v)); };
   row("Base de datos", s.db);
