@@ -22,7 +22,9 @@ from openai import OpenAI
 import config
 import graph_store
 import graph_view
+import flow_store
 import memory
+import prompts
 import settings
 import vector_search
 
@@ -60,21 +62,12 @@ def _format_entity(e: dict) -> str:
 
 
 def _build_system_prompt(memory_ctx: str, docs_ctx: list[dict], entities: list[dict]) -> str:
-    partes = [
-        "Eres un asistente que responde sobre la documentacion y los repositorios de codigo indexados. "
-        "Usa SOLO el contexto proporcionado. Cita la fuente entre corchetes tras cada afirmacion "
-        "([fuente - pag. N] o [grafo: _id]). Si el contexto no cubre la pregunta, dilo claramente: no inventes."
-    ]
-    if memory_ctx:
-        partes.append("## Recuerdos de conversaciones anteriores\n" + memory_ctx)
-    if docs_ctx:
-        bloques = [f"[{d.get('metadata', {}).get('source', 'desconocido')} - pag. "
-                   f"{d.get('metadata', {}).get('page', '?')}]\n{d.get('text', '')}" for d in docs_ctx]
-        partes.append("## Fragmentos de los documentos\n" + "\n\n".join(bloques))
-    if entities:
-        partes.append("## Grafo de conocimiento (entidades y relaciones)\n"
-                      + "\n".join(_format_entity(e) for e in entities[:60]))
-    return "\n\n".join(partes)
+    """Prompt del Motor Cognitivo (ver prompts.py): solo conocimiento interno, con etiqueta de origen."""
+    docs_block = "\n\n".join(
+        f"[{d.get('metadata', {}).get('source', 'desconocido')} · pág. {d.get('metadata', {}).get('page', '?')}]\n{d.get('text', '')}"
+        for d in docs_ctx)
+    graph_block = "\n".join(_format_entity(e) for e in entities[:60])
+    return prompts.build_internal(memory_ctx, docs_block, graph_block)
 
 
 # Palabra clave que el LLM devuelve cuando la memoria NO basta para responder.
@@ -88,13 +81,7 @@ def _answer_from_memory(question: str, memory_ctx: str) -> tuple[str | None, dic
     contienen la respuesta la da; si no, el LLM contesta NECESITO_DOCUMENTOS
     y entonces habra que buscar en la BBDD.
     """
-    system = (
-        "Responde a la pregunta usando UNICAMENTE los recuerdos de la "
-        "conversacion que se indican abajo. Si contienen la respuesta, "
-        "respondela directamente. Si NO la contienen o no estas seguro, "
-        f"responde exactamente: {NEED_DOCS}\n\n"
-        "## Recuerdos\n" + memory_ctx
-    )
+    system = prompts.build_memory(memory_ctx, NEED_DOCS)
     response = _llm().chat.completions.create(
         model=settings.llm("chat")["model"],
         messages=[
@@ -103,7 +90,11 @@ def _answer_from_memory(question: str, memory_ctx: str) -> tuple[str | None, dic
         ],
     )
     text = (response.choices[0].message.content or "").strip()
-    return (None if NEED_DOCS in text or not text else text), _usage(response)
+    if NEED_DOCS in text or not text:
+        return None, _usage(response)
+    if prompts.origin_of(text) != "memory":   # la etiqueta de origen es obligatoria
+        text = f"{prompts.TAG_MEMORY}\n{text}"
+    return text, _usage(response)
 
 
 def _step(id: str, label: str, status: str, detail: str = "", t0: float | None = None,
@@ -120,6 +111,38 @@ def _step(id: str, label: str, status: str, detail: str = "", t0: float | None =
     return ev
 
 
+def _external_answer(question: str, prev: dict, thread_id: str, use_memory: bool, user_id: str):
+    """Responde FUERA de la base de conocimiento (conocimiento general del modelo), con permiso del usuario."""
+    for sid, label in (("memory_read", "Memoria · leer contexto"), ("db_search", "BBDD · búsqueda"),
+                       ("graph_search", "Grafo · $graphLookup")):
+        yield _step(sid, label, "skipped", "búsqueda externa autorizada por el usuario")
+    model = settings.llm("chat")["model"]
+    label = f"LLM · {model} · fuera de la base de conocimiento"
+    yield _step("llm", label, "running")
+    t0 = time.time()
+    response = _llm().chat.completions.create(
+        model=model,
+        messages=[{"role": "system", "content": prompts.build_external(prev.get("question", ""), prev.get("reply", ""))},
+                  {"role": "user", "content": prev.get("question", "")}],
+    )
+    text = response.choices[0].message.content or ""
+    if prompts.origin_of(text) != "external":   # garantiza la etiqueta de origen aunque el modelo la omita
+        text = f"{prompts.TAG_EXTERNAL}\n{text}"
+    usage = _usage(response)
+    yield _step("llm", label, "done", f"responde a: «{prev.get('question', '')[:80]}»", t0, usage)
+    if use_memory:
+        try:
+            memory.record_turn(thread_id, "user", question, user_id)
+            memory.record_turn(thread_id, "assistant", text, user_id)
+            yield _step("memory_write", "Memoria · guardar turno", "done", "")
+        except Exception as exc:
+            yield _step("memory_write", "Memoria · guardar turno", "error", str(exc)[:120])
+    else:
+        yield _step("memory_write", "Memoria · guardar turno", "skipped", "memoria desactivada")
+    yield {"type": "result", "reply": text, "origin": "external", "memory": {"stm": 0, "episodic": 0, "semantic": 0},
+           "documents": 0, "tokens": usage, "graph": {"nodes": [], "edges": []}, "sources": [], "chunks": []}
+
+
 def answer_stream(question: str, thread_id: str, use_memory: bool = True,
                   user_id: str = memory.DEFAULT_USER_ID):
     """Genera la respuesta emitiendo EVENTOS de cada paso del flujo.
@@ -131,6 +154,29 @@ def answer_stream(question: str, thread_id: str, use_memory: bool = True,
       documents -> cuantos fragmentos de la BBDD (Atlas) se usaron
     La UI usa estos eventos para el panel "Flujo de la peticion".
     """
+    # Paso 0: ¿el usuario esta aceptando salir de la base de conocimiento?
+    # La pregunta anterior termino con prompts.OFFER_EXTERNAL y ahora responde "si".
+    prev = None
+    if prompts.is_confirmation(question):
+        try:
+            prev = flow_store.last_turn(user_id, thread_id)
+        except Exception as exc:
+            print(f"[aviso] No se pudo leer el turno anterior: {exc}")
+    if prev and prompts.offered_external(prev.get("reply", "")):
+        yield from _external_answer(question, prev, thread_id, use_memory, user_id)
+        return
+    if prompts.is_confirmation(question):
+        # Un "si" suelto sin oferta pendiente no es una pregunta: no se busca ni se llama al LLM.
+        text = (f"{prompts.TAG_NONE}\nNo hay ninguna búsqueda externa pendiente de confirmar. "
+                "Escribe tu pregunta y la buscaré en la base de conocimiento.")
+        for sid, label in (("memory_read", "Memoria · leer contexto"), ("db_search", "BBDD · búsqueda"),
+                           ("graph_search", "Grafo · $graphLookup"), ("llm", "LLM de chat")):
+            yield _step(sid, label, "skipped", "confirmación sin oferta pendiente")
+        yield {"type": "result", "reply": text, "origin": "none", "memory": {"stm": 0, "episodic": 0, "semantic": 0},
+               "documents": 0, "tokens": {"prompt": 0, "completion": 0, "total": 0},
+               "graph": {"nodes": [], "edges": []}, "sources": [], "chunks": []}
+        return
+
     # Paso 1: memoria (leer).
     memory_ctx = ""
     memory_counts = {"stm": 0, "episodic": 0, "semantic": 0}
@@ -228,7 +274,10 @@ def answer_stream(question: str, thread_id: str, use_memory: bool = True,
             model=model,
             messages=[{"role": "system", "content": system}, {"role": "user", "content": question}],
         )
-        answer_text = response.choices[0].message.content
+        answer_text = response.choices[0].message.content or ""
+        if not prompts.origin_of(answer_text):
+            # Salvaguarda: la etiqueta de origen es obligatoria. Si el modelo la omite, se deduce de los datos.
+            answer_text = f"{prompts.TAG_INTERNAL if (docs_ctx or graph_entities) else prompts.TAG_NONE}\n{answer_text}"
         lu = _usage(response)
         add(lu)
         yield _step("llm", f"LLM · {model}", "done", "respuesta generada", t0, lu)
@@ -249,8 +298,10 @@ def answer_stream(question: str, thread_id: str, use_memory: bool = True,
     else:
         yield _step("memory_write", "Memoria · guardar turno", "skipped", "memoria desactivada")
 
+    origin = prompts.origin_of(answer_text or "")
     yield {
         "type": "result",
+        "origin": origin,
         "reply": answer_text,
         "memory": memory_counts,
         "documents": len(docs_ctx),

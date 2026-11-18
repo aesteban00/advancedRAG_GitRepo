@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Motor Cognitivo (KB) · MongoDB Atlas</title>
-  <link rel="stylesheet" href="/static/style.css?v=38" />
+  <link rel="stylesheet" href="/static/style.css?v=39" />
 </head>
 <body>
   <!-- Barra superior (estilo consola Atlas) -->
@@ -137,6 +137,17 @@
         </div>
       </section>
 
+      <!-- Pop-up con el prompt del LLM de chat -->
+      <div id="prompt-modal" class="modal" hidden role="dialog" aria-modal="true" aria-labelledby="prompt-title">
+        <div class="modal-box">
+          <div class="modal-head">
+            <h2 id="prompt-title">Prompt del LLM de chat</h2>
+            <button type="button" id="prompt-close" class="btn" aria-label="Cerrar">×</button>
+          </div>
+          <div id="prompt-body" class="modal-body"></div>
+        </div>
+      </div>
+
       <!-- ============ Vista EXPLICACION: ingesta (arriba) y consulta (abajo) ============ -->
       <section id="view-explain" class="view" hidden>
         <div class="explain-wrap">
@@ -171,7 +182,7 @@
             <p class="status" id="emb-help"></p>
             <label class="chk"><input type="checkbox" id="llm-same" checked /> Usar el mismo LLM para grafo y chat</label>
             <div id="llm-chat" class="llm-form">
-              <h3 id="llm-chat-title">LLM (grafo + chat)</h3>
+              <h3><span id="llm-chat-title">LLM (grafo + chat)</span> <a href="#" id="prompt-link" class="prompt-link">Ver prompt</a></h3>
               <label>Base URL <input type="text" id="chat-base-url" /></label>
               <label>API key <input type="password" id="chat-api-key" placeholder="(sin cambios)" autocomplete="off" /></label>
               <label>Modelo <input type="text" id="chat-model" /></label>
@@ -242,8 +253,8 @@
     </main>
   </div>
 
-  <script src="/static/graph.js?v=38"></script>
-  <script src="/static/explain.js?v=38"></script>
-  <script src="/static/app.js?v=38"></script>
+  <script src="/static/graph.js?v=39"></script>
+  <script src="/static/explain.js?v=39"></script>
+  <script src="/static/app.js?v=39"></script>
 </body>
 </html>

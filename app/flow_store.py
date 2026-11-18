@@ -35,6 +35,7 @@ def save_flow(user_id: str, thread_id: str, question: str,
         "tokens": result.get("tokens", {}),
         "graph": result.get("graph"),
         "chunks": result.get("chunks", []),
+        "origin": result.get("origin", ""),
         "created_at": datetime.now(timezone.utc),
     }
     return str(_coll().insert_one(doc).inserted_id)
@@ -79,6 +80,12 @@ def list_threads(user_id: str, limit: int = 30) -> list[dict]:
     ]
 
 
+def last_turn(user_id: str, thread_id: str) -> dict | None:
+    """Ultima pregunta/respuesta del hilo (para saber si se ofrecio buscar fuera)."""
+    return _coll().find_one({"user_id": user_id, "thread_id": thread_id},
+                            {"question": 1, "reply": 1, "origin": 1}, sort=[("created_at", -1)])
+
+
 def get_thread(user_id: str, thread_id: str) -> list[dict]:
     """Todas las preguntas/respuestas de un hilo, en orden cronologico."""
     cursor = _coll().find({"user_id": user_id, "thread_id": thread_id}).sort("created_at", 1)
@@ -89,6 +96,7 @@ def get_thread(user_id: str, thread_id: str) -> list[dict]:
             "reply": d.get("reply", ""),
             "memory": d.get("memory", {}),
             "documents": d.get("documents", 0),
+            "origin": d.get("origin", ""),
         }
         for d in cursor
     ]

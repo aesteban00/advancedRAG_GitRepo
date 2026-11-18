@@ -463,3 +463,22 @@ body.explain-active .side-resizer { display: block; }
 body.explain-active .sidebar { width: var(--side-w, 300px); min-width: 0; }
 body.explain-active.side-collapsed .sidebar { width: 0; padding: 0; border-right: 0; overflow: hidden; }
 body.side-dragging, body.side-dragging * { user-select: none; cursor: col-resize !important; }
+
+/* ---- Origen de cada respuesta ---- */
+.origin-badge { display: inline-block; margin-bottom: 6px; padding: 1px 10px; border-radius: 999px; font-size: 0.72rem; font-weight: 700; }
+.o-internal { background: #e3fcf7; color: var(--green-dark); border: 1px solid var(--green); }
+.o-partial { background: #fff4d6; color: #6b4a00; border: 1px solid #ffc010; }
+.o-none { background: #f1f4f3; color: #3b4a48; border: 1px solid #b8c4c2; }
+.o-external { background: #ffe9e6; color: #b42318; border: 1px solid #f0b4ae; }
+.o-memory { background: #ede2ff; color: #5b21b6; border: 1px solid #c4b5fd; }
+
+/* ---- Pop-up del prompt ---- */
+.prompt-link { font-size: 0.74rem; font-weight: 500; margin-left: 8px; color: var(--green-dark); }
+.modal { position: fixed; inset: 0; background: rgba(0, 30, 43, .45); display: flex; align-items: center; justify-content: center; z-index: 50; padding: 24px; }
+.modal[hidden] { display: none; }
+.modal-box { background: #fff; border-radius: 16px; width: min(900px, 100%); max-height: 88vh; display: flex; flex-direction: column; box-shadow: 0 12px 40px rgba(0,0,0,.25); }
+.modal-head { display: flex; align-items: center; justify-content: space-between; padding: 14px 18px; border-bottom: 1px solid var(--border); }
+.modal-head h2 { margin: 0; font-size: 1.05rem; }
+.modal-body { padding: 14px 18px; overflow: auto; }
+.modal-body h3 { margin: 12px 0 6px; font-size: 0.85rem; }
+.modal-body pre.code { max-height: none; white-space: pre-wrap; }

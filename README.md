@@ -40,6 +40,13 @@ Además: un modelo de **embedding**, un **LLM para construir el grafo** y otro *
 - **Grafo**: visor navegable (NetworkX calcula el layout; se dibuja en SVG). Zoom y arrastre; **filtros** por tipo de nodo y de relación (el código —ficheros, clases, funciones— va oculto por defecto); **clic** = ficha de la entidad (atributos, fuentes, relaciones salientes y entrantes clicables); **doble clic** = expandir o colapsar su vecindario sin perder lo que ya ves; búsqueda con autocompletado y **camino más corto entre dos entidades** (`$graphLookup`), sin distinguir si vienen de repos o de documentos.
 - **Configuración**: modelos, ingesta, recuperación, fuentes y estado de los índices de Atlas.
 
+## Prompt del chat: origen siempre visible
+El LLM de chat responde como un **Motor Cognitivo**: claro, conciso y sin dudas sobre el origen de la información.
+- Cada respuesta empieza por una etiqueta de origen, que la interfaz muestra en color: **Conocimiento interno** (documentos y repos, con citas `[fuente · pág. N]` o `[grafo: id]`), **Interno · parcial**, **Sin información interna**, **Fuente externa** o **Memoria de conversaciones**.
+- Con conocimiento interno no puede completar con lo que "sabe": si algo no está en la base de conocimiento, lo dice y pregunta **«¿Quieres que busque fuera de la base de conocimiento?»**.
+- Si respondes que sí («sí», «vale, búscalo»…), responde con el conocimiento general del modelo, etiquetado como **Fuente externa**. No hay buscador conectado: no inventa enlaces ni dice que ha buscado en internet.
+- El prompt completo se ve en **Configuración → LLM de chat → Ver prompt** (y en `app/prompts.py`). API: `GET /prompt`.
+
 ## Usuarios
 El **usuario** del panel izquierdo es una etiqueta (sin contraseña) que separa lo público de lo privado: los documentos y repos *públicos* los ve todo el mundo; los *privados* y las sesiones de chat, solo su usuario.
 - Es un **desplegable** con los usuarios que ya tienen datos (propietarios de documentos, de repos o de sesiones), con sus recuentos: `demo-user · 5 docs · 2 repos`.

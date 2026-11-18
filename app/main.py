@@ -31,6 +31,7 @@ from datetime import datetime, timezone
 
 import db
 import jobs
+import prompts
 import removal
 import github_ingest
 import graph_store
@@ -116,6 +117,12 @@ def users():
         return vector_search.list_users()
     except Exception as exc:
         raise _http_error(exc)
+
+
+@app.get("/prompt")
+def chat_prompt():
+    """Prompts del LLM de chat (para el pop-up de Configuracion)."""
+    return prompts.prompt_view()
 
 
 @app.get("/explain")

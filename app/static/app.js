@@ -234,7 +234,15 @@ document.querySelectorAll(".tab").forEach((t) =>
 );
 
 // Utilidad: agrega un mensaje al cuadro de chat.
-function addMessage(role, text, memory = null, documents = null) {
+// Etiqueta de ORIGEN de cada respuesta (debe quedar claro si viene de dentro o de fuera).
+const ORIGINS = {
+  internal: ["Conocimiento interno", "o-internal"],
+  partial: ["Interno · parcial", "o-partial"],
+  none: ["Sin información interna", "o-none"],
+  external: ["Fuente externa", "o-external"],
+  memory: ["Memoria de conversaciones", "o-memory"],
+};
+function addMessage(role, text, memory = null, documents = null, origin = "") {
   // Devuelve el div creado (para poder asociarle su flujo).
   const box = document.getElementById("chat-box");
   const div = document.createElement("div");
@@ -270,6 +278,12 @@ function addMessage(role, text, memory = null, documents = null) {
       tag.textContent = "Solo LLM (sin memoria ni BBDD)";
     }
     if (tag.className) wrap.appendChild(tag);
+  }
+  if (ORIGINS[origin]) {
+    const o = document.createElement("span");
+    o.className = "origin-badge " + ORIGINS[origin][1];
+    o.textContent = ORIGINS[origin][0];
+    div.prepend(o);
   }
   const body = document.createElement("div");
   body.textContent = text;
@@ -500,7 +514,7 @@ async function openThread(id) {
     const msgs = await res.json();
     for (const m of msgs) {
       attachFlow(addMessage("user", m.question), m.id);
-      addMessage("assistant", m.reply || "(respuesta no guardada)", m.memory, m.documents);
+      addMessage("assistant", m.reply || "(respuesta no guardada)", m.memory, m.documents, m.origin);
     }
   } catch (err) {}
   loadSessions();
@@ -535,7 +549,7 @@ let stepsSeen = {}; // ultimo estado de cada paso del turno en curso
 function handleEvent(ev) {
   if (ev.type === "step") { updateStep(ev); stepsSeen[ev.id] = ev; }
   else if (ev.type === "result") {
-    addMessage("assistant", ev.reply, ev.memory, ev.documents);
+    addMessage("assistant", ev.reply, ev.memory, ev.documents, ev.origin);
     showOrigin(ev.memory, ev.documents);
     showTokens(ev.tokens, Object.values(stepsSeen));
     showChunks(ev.chunks);
@@ -790,3 +804,31 @@ $("refresh-status").addEventListener("click", loadStatus);
 
 loadSettings();
 showView(localStorage.getItem("view") || "chat");
+
+// ---- Pop-up con el prompt del LLM de chat ----
+async function showPrompt(e) {
+  e.preventDefault();
+  const body = document.getElementById("prompt-body");
+  body.replaceChildren();
+  try {
+    const p = await apiJson("/prompt");
+    const sec = (title, text) => {
+      body.appendChild(Object.assign(document.createElement("h3"), { textContent: title }));
+      body.appendChild(Object.assign(document.createElement("pre"), { className: "code", textContent: text }));
+    };
+    sec("1 · Respuesta con conocimiento interno (documentos y repos)", p.internal);
+    sec("2 · Respuesta fuera de la base de conocimiento (solo si el usuario lo autoriza)", p.external);
+    sec("3 · Respuesta solo con la memoria de conversaciones", p.memory);
+    const note = document.createElement("p");
+    note.className = "status";
+    note.textContent = `Etiquetas de origen: ${p.tags.join(" · ")}. Si el contexto interno no basta, el modelo termina con «${p.offer}»; un «sí» en el turno siguiente activa el prompt 2.`;
+    body.appendChild(note);
+  } catch (err) { body.textContent = "Error: " + err.message; }
+  document.getElementById("prompt-modal").hidden = false;
+  document.getElementById("prompt-close").focus();
+}
+const closePrompt = () => { document.getElementById("prompt-modal").hidden = true; };
+document.getElementById("prompt-link").addEventListener("click", showPrompt);
+document.getElementById("prompt-close").addEventListener("click", closePrompt);
+document.getElementById("prompt-modal").addEventListener("click", (e) => { if (e.target.id === "prompt-modal") closePrompt(); });
+document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !document.getElementById("prompt-modal").hidden) closePrompt(); });
