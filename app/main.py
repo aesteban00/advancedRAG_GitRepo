@@ -26,6 +26,7 @@ import chat
 import config
 import flow_store
 import jobs
+import removal
 import github_ingest
 import graph_store
 import graph_view
@@ -127,6 +128,24 @@ def ingest_github(req: GithubRequest):
             raise HTTPException(400, str(exc))
     jid = jobs.start("github", jobs.run_github, req.urls, req.user_id, req.visibility)
     return {"job_id": jid, "skipped": []}
+
+
+class DeleteItem(BaseModel):
+    kind: str          # "file" | "repo"
+    source: str
+
+
+class DeleteRequest(BaseModel):
+    items: list[DeleteItem]
+    user_id: str = "demo-user"
+
+
+@app.post("/documents/delete")
+def delete_documents(req: DeleteRequest):
+    """Elimina ficheros y repos (chunks + lo que solo ellos aportaron al grafo). Solo el propietario."""
+    if not 1 <= len(req.items) <= 100:
+        raise HTTPException(400, "Indica entre 1 y 100 elementos.")
+    return {"results": removal.delete_items([i.model_dump() for i in req.items], req.user_id)}
 
 
 @app.get("/jobs/{job_id}")

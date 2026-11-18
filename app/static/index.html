@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>GraphRAG · MongoDB Atlas</title>
-  <link rel="stylesheet" href="/static/style.css?v=30" />
+  <link rel="stylesheet" href="/static/style.css?v=31" />
 </head>
 <body>
   <!-- Barra superior (estilo consola Atlas) -->
@@ -41,6 +41,12 @@
         <button type="button" class="tab" data-tab="private">Mis privados</button>
       </div>
       <ul id="doc-list" class="doc-list"></ul>
+      <!-- Borrado: marca los elementos y pulsa Eliminar (solo los que subiste tu) -->
+      <div class="doc-actions" id="doc-actions" hidden>
+        <label class="chk"><input type="checkbox" id="doc-select-all" /> Todos</label>
+        <button type="button" id="doc-delete" class="btn danger" disabled>Eliminar (0)</button>
+      </div>
+      <div id="doc-status" class="doc-status"></div>
     </nav>
 
     <main class="content">
@@ -191,7 +197,7 @@
     </main>
   </div>
 
-  <script src="/static/graph.js?v=30"></script>
-  <script src="/static/app.js?v=30"></script>
+  <script src="/static/graph.js?v=31"></script>
+  <script src="/static/app.js?v=31"></script>
 </body>
 </html>

@@ -286,5 +286,43 @@ def path_entities(path: list[str]) -> list[dict]:
     return ents
 
 
+def _drop_targets(rel: dict, gone: set) -> tuple[dict, int]:
+    """Quita de una entidad las relaciones cuyo destino ya no existe. Las tres listas de
+    `relationships` van en paralelo (por posicion), asi que se filtran por indice. -> (nuevo, n_quitadas)."""
+    ids = rel.get("target_ids", [])
+    keep = [i for i, t in enumerate(ids) if t not in gone]
+    new = {k: [rel.get(k, [])[i] for i in keep if i < len(rel.get(k, []))]
+           for k in ("target_ids", "types", "attributes")}
+    return new, len(ids) - len(keep)
+
+
+def remove_source(pattern: str) -> dict:
+    """Borra del grafo lo que aporto una fuente (regex sobre attributes.sources).
+    1) Se QUITA la fuente de cada entidad. Una entidad puede venir de varias fuentes
+       (p. ej. "Banco Sabadell" en varios documentos): mientras le quede alguna, se conserva.
+    2) Las entidades que se quedan SIN fuentes se eliminan.
+    3) Se limpian las relaciones que apuntaban a las eliminadas.
+    Limite: los atributos y relaciones salientes de una entidad que se conserva no se atribuyen
+    a una fuente concreta, asi que permanecen."""
+    coll = db.coll(config.COLL_GRAPH)
+    q = {"attributes.sources": {"$regex": pattern}}
+    touched = [d["_id"] for d in coll.find(q, {"_id": 1})]
+    if not touched:
+        return {"entities_updated": 0, "entities_deleted": 0, "edges_removed": 0}
+    coll.update_many(q, {"$pull": {"attributes.sources": {"$regex": pattern}}})
+    orphans = [d["_id"] for d in coll.find({"_id": {"$in": touched}, "attributes.sources": {"$size": 0}}, {"_id": 1})]
+    removed = 0
+    if orphans:
+        coll.delete_many({"_id": {"$in": orphans}})
+        gone, ops = set(orphans), []
+        for d in coll.find({"relationships.target_ids": {"$in": orphans}}, {"relationships": 1}):
+            new, n = _drop_targets(d["relationships"], gone)
+            removed += n
+            ops.append(UpdateOne({"_id": d["_id"]}, {"$set": {"relationships": new}}))
+        if ops:
+            coll.bulk_write(ops)
+    return {"entities_updated": len(touched) - len(orphans), "entities_deleted": len(orphans), "edges_removed": removed}
+
+
 def count() -> int:
     return db.coll(config.COLL_GRAPH).estimated_document_count()

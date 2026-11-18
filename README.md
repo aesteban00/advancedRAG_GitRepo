@@ -39,6 +39,14 @@ Además: un modelo de **embedding**, un **LLM para construir el grafo** y otro *
 - **Grafo**: visor navegable (NetworkX calcula el layout; se dibuja en SVG). Zoom y arrastre; **filtros** por tipo de nodo y de relación (el código —ficheros, clases, funciones— va oculto por defecto); **clic** = ficha de la entidad (atributos, fuentes, relaciones salientes y entrantes clicables); **doble clic** = expandir o colapsar su vecindario sin perder lo que ya ves; búsqueda con autocompletado y **camino más corto entre dos entidades** (`$graphLookup`), sin distinguir si vienen de repos o de documentos.
 - **Configuración**: modelos, ingesta, recuperación, fuentes y estado de los índices de Atlas.
 
+## Eliminar documentos y repos
+En la lista **Documentos** del panel izquierdo cada elemento tiene una casilla. Márcalos (o usa *Todos*) y pulsa **Eliminar (N)**; la interfaz pide confirmación porque no se puede deshacer.
+- Se borran sus fragmentos de las tres colecciones (con `autoEmbed`, Atlas retira solo los vectores) y **lo que solo ellos aportaron al grafo**. Si una entidad viene de varias fuentes (p. ej. una organización citada en dos documentos) se conserva mientras le quede alguna; las relaciones que apuntaban a entidades eliminadas se limpian.
+- Un repo se elimina entero: su grafo, su README y sus `docs/`. Un repo de nombre parecido (`acme/api-v2` frente a `acme/api`) no se toca.
+- Solo puede eliminar su **propietario**: los elementos de otros usuarios aparecen con la casilla bloqueada (cambia el usuario si los subiste tú con otro nombre).
+- Límite: los atributos y relaciones de una entidad que se conserva no se atribuyen a una fuente concreta, así que permanecen. Para un grafo limpio al 100 %, vuelve a ingerir lo que quede.
+- API: `POST /documents/delete` con `{"items": [{"kind": "file" | "repo", "source": "..."}], "user_id": "..."}`.
+
 ## Búsqueda híbrida: vectorial + BM25
 La búsqueda vectorial entiende el significado («cuánto dura el código» ≈ «vigencia del código»), pero puede fallar con **siglas, códigos o nombres propios** («RDL 19/2022»). BM25 (`$search`) acierta con esos términos exactos, pero no entiende sinónimos. En modo **híbrido** MongoDB ejecuta las dos búsquedas y fusiona los rankings con *Reciprocal Rank Fusion* dentro de una única agregación:
 

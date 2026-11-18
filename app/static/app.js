@@ -40,10 +40,27 @@ visToggle.addEventListener("click", () => {
 let activeTab = "public";
 let docs = { public: [], private: [] };
 
+// Elementos marcados para borrar: claves "kind\u0001source".
+const selected = new Set();
+const docKey = (d) => `${d.kind || "file"}\u0001${d.source}`;
+const isMine = (d) => d.owner === currentUser();   // el servidor tambien lo comprueba
+
+function updateDeleteButton() {
+  const n = selected.size;
+  const btn = document.getElementById("doc-delete");
+  btn.textContent = `Eliminar (${n})`;
+  btn.disabled = n === 0;
+  const mine = docs[activeTab].filter(isMine);
+  const all = document.getElementById("doc-select-all");
+  all.checked = mine.length > 0 && mine.every((d) => selected.has(docKey(d)));
+  all.disabled = mine.length === 0;
+}
+
 function renderDocuments() {
   const list = document.getElementById("doc-list");
   list.innerHTML = "";
   const items = docs[activeTab];
+  document.getElementById("doc-actions").hidden = !items.length;
   if (!items.length) {
     const li = document.createElement("li");
     li.className = "empty";
@@ -53,12 +70,58 @@ function renderDocuments() {
   }
   for (const d of items) {
     const li = document.createElement("li");
-    li.textContent = d.kind === "repo"
+    const cb = document.createElement("input");
+    cb.type = "checkbox";
+    cb.checked = selected.has(docKey(d));
+    cb.disabled = !isMine(d);
+    if (cb.disabled) cb.title = `Solo su propietario (${d.owner}) puede eliminarlo: cambia el usuario`;
+    cb.addEventListener("change", () => {
+      cb.checked ? selected.add(docKey(d)) : selected.delete(docKey(d));
+      updateDeleteButton();
+    });
+    const txt = document.createElement("span");
+    txt.textContent = d.kind === "repo"
       ? `${d.source} · repo GitHub${d.language ? " · " + d.language : ""} · ${d.chunks} chunks de docs · por ${d.owner}`
       : `${d.source} · ${d.chunks} chunks · subido por ${d.owner}`;
+    li.append(cb, txt);
     list.appendChild(li);
   }
+  updateDeleteButton();
 }
+
+document.getElementById("doc-select-all").addEventListener("change", (e) => {
+  for (const d of docs[activeTab].filter(isMine)) e.target.checked ? selected.add(docKey(d)) : selected.delete(docKey(d));
+  renderDocuments();
+});
+
+// Elimina lo marcado: pide confirmacion (no se puede deshacer) y muestra el resumen.
+async function deleteSelected() {
+  const items = [...selected].map((k) => { const [kind, source] = k.split("\u0001"); return { kind, source }; });
+  if (!items.length) return;
+  const names = items.map((i) => (i.kind === "repo" ? "[repo] " : "") + i.source).join("\n");
+  if (!confirm(`¿Eliminar ${items.length} elemento(s)?\n\n${names}\n\nSe borran sus fragmentos y lo que solo ellos aportaron al grafo. No se puede deshacer.`)) return;
+  const status = document.getElementById("doc-status");
+  const btn = document.getElementById("doc-delete");
+  btn.disabled = true;
+  status.className = "doc-status"; status.textContent = "Eliminando…";
+  try {
+    const { results } = await apiJson("/documents/delete", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ items, user_id: currentUser() }),
+    });
+    const ok = results.filter((r) => !r.error), bad = results.filter((r) => r.error);
+    const sum = (k) => ok.reduce((n, r) => n + (r[k] || 0), 0);
+    status.replaceChildren();
+    const line = (cls, text) => { const p = document.createElement("div"); p.className = cls; p.textContent = text; status.appendChild(p); };
+    if (ok.length) line("ok", `Eliminados ${ok.length} · ${sum("chunks_deleted")} fragmentos · ${sum("entities_deleted")} entidades · ${sum("edges_removed")} relaciones`);
+    bad.forEach((r) => line("error", `${r.source}: ${r.error}`));
+  } catch (err) {
+    status.className = "doc-status error"; status.textContent = "Error: " + err.message;
+  }
+  selected.clear();
+  loadDocuments(); loadStatus(); loadOverviewGraph();
+}
+document.getElementById("doc-delete").addEventListener("click", deleteSelected);
 
 async function loadDocuments() {
   try {
@@ -69,6 +132,8 @@ async function loadDocuments() {
     console.error("loadDocuments:", err);
     docs = { public: [], private: [] };
   }
+  const present = new Set([...docs.public, ...docs.private].map(docKey));
+  for (const k of [...selected]) if (!present.has(k)) selected.delete(k);
   renderDocuments();
 }
 

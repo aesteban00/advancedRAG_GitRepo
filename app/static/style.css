@@ -382,3 +382,15 @@ input[type=range]:disabled { opacity: 0.4; }
 .tag { padding: 0 8px; border-radius: 999px; font-size: 0.7rem; font-weight: 600; }
 .tag.vector { background: #e0efff; color: #0b4dad; } .tag.bm25 { background: #fff0d6; color: #7a4a00; }
 code { background: #f1f4f3; padding: 0 4px; border-radius: 4px; font-size: 0.85em; }
+
+/* ---- Borrado de documentos y repos ---- */
+.doc-list li { display: flex; gap: 8px; align-items: flex-start; }
+.doc-list li input[type=checkbox] { margin-top: 3px; flex-shrink: 0; }
+.doc-list li input[type=checkbox]:disabled { opacity: .35; cursor: not-allowed; }
+.doc-actions { display: flex; align-items: center; justify-content: space-between; padding: 8px 20px 0; font-size: 0.78rem; }
+.doc-actions[hidden] { display: none; }
+.btn.danger { background: #fff; color: #b42318; border: 1px solid #f0b4ae; }
+.btn.danger:hover:not(:disabled) { background: #b42318; color: #fff; }
+.btn.danger:disabled { opacity: .45; cursor: not-allowed; }
+.doc-status { padding: 6px 20px 0; font-size: 0.74rem; word-break: break-word; }
+.doc-status .ok { color: var(--green-dark); } .doc-status .error, .doc-status.error { color: #b42318; }
