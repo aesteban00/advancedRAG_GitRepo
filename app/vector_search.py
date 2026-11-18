@@ -1,8 +1,16 @@
 # ============================================================
 #  vector_search.py
-#  $vectorSearch (+ $rerank) sobre las 3 colecciones de chunks.
-#  Ventaja MongoDB: con autoEmbed ni siquiera generamos el vector de la
-#  pregunta; Atlas lo hace con el mismo modelo del indice.
+#  Busqueda en las 3 colecciones de chunks. Tres modos (Configuracion):
+#    vector  -> $vectorSearch (significado)
+#    bm25    -> $search       (palabras exactas, BM25)
+#    hybrid  -> $rankFusion(vectorSearch + search): la BASE DE DATOS fusiona
+#               ambos rankings con Reciprocal Rank Fusion (RRF)
+#  y despues $rerank. Por que hibrida: la vectorial entiende el significado
+#  pero falla con siglas, codigos o nombres propios; BM25 acierta con esos
+#  terminos exactos pero no entiende sinonimos. Juntas se compensan.
+#  Ventaja MongoDB: mismo documento, indice vectorial + indice de texto +
+#  fusion + rerank en UNA sola agregacion. Con autoEmbed ni siquiera se
+#  genera el vector de la pregunta: lo hace Atlas con el modelo del indice.
 # ============================================================
 
 from __future__ import annotations
@@ -17,6 +25,8 @@ import embeddings
 import settings
 from setup_indexes import auto_index_name
 
+POOL = 3  # candidatos por pipeline = top_k * POOL: se fusionan y rerankean, y luego se recortan a top_k
+
 
 def _rerank_stage(query: str) -> list[dict]:
     if not config.RERANK_ENABLED:
@@ -27,8 +37,9 @@ def _rerank_stage(query: str) -> list[dict]:
 
 
 def _project_stage(coll_name: str) -> dict:
-    score = "$rerankScore" if config.RERANK_ENABLED else {"$meta": "vectorSearchScore"}
-    return {"$project": {"text": 1, "metadata": 1, "score": score, "collection": {"$literal": coll_name}}}
+    score = "$rerankScore" if config.RERANK_ENABLED else {"$meta": "score"}
+    return {"$project": {"text": 1, "metadata": 1, "score": score, "_sd": 1,
+                         "collection": {"$literal": coll_name}}}
 
 
 def _visibility_filter(user_id: str) -> dict:
@@ -39,53 +50,100 @@ def _filter(user_id: str, model: str) -> dict:
     return {"$and": [_visibility_filter(user_id), {"metadata.model": model}]}
 
 
-def _run(coll_name: str, stage: dict, query: str) -> list[dict]:
-    pipeline = [{"$vectorSearch": stage}, *_rerank_stage(query), _project_stage(coll_name)]
-    return list(db.coll(coll_name).aggregate(pipeline))
+def _lexical_stage(query: str, user_id: str, model: str) -> dict:
+    """$search (BM25). `text` se busca con el analizador estandar (terminos exactos) y con el de
+    espanol (stemming). Los filtros usan campos `token` del indice, igual que el pre-filtro vectorial."""
+    eq = lambda path, value: {"equals": {"path": path, "value": value}}
+    return {"$search": {"index": config.TEXT_INDEX, "compound": {
+        "must": [{"text": {"query": query, "path": ["text", {"value": "text", "multi": "es"}]}}],
+        "filter": [{"compound": {"should": [eq("metadata.visibility", "public"), eq("metadata.owner", user_id)],
+                                 "minimumShouldMatch": 1}},
+                   eq("metadata.model", model)]}}}
 
 
-def _search_auto(query: str, user_id: str, top_k: int) -> list[dict]:
-    model = settings.get()["embedding"]["auto_embed"]
-    stage = {"index": auto_index_name(model), "path": "text", "query": {"text": query},
-             "numCandidates": top_k * 20, "limit": top_k, "filter": _filter(user_id, model)}
+def _pipeline(vec: dict | None, lex: dict | None, mode: str, pool: int) -> list[dict]:
+    """Etapas de recuperacion segun el modo (antes del rerank)."""
+    if mode == "vector":
+        return [{"$vectorSearch": vec}]
+    if mode == "bm25":
+        return [lex, {"$limit": pool}]
+    fusion = {"$rankFusion": {
+        "input": {"pipelines": {"vector": [{"$vectorSearch": vec}], "bm25": [lex, {"$limit": pool}]}},
+        "combination": {"weights": config.RRF_WEIGHTS},
+        "scoreDetails": True}}   # scoreDetails: rango de cada resultado en cada pipeline
+    return [fusion, {"$addFields": {"_sd": {"$meta": "scoreDetails"}}}]
+
+
+def _annotate(doc: dict, mode: str) -> dict:
+    """Anade de donde sale el fragmento: found_by (['vector','bm25']) y ranks ({'vector': 2, 'bm25': 1})."""
+    sd = doc.pop("_sd", None) or {}
+    if mode == "hybrid":
+        # Si el fragmento no estaba en un pipeline, $rankFusion devuelve rank "NA": no cuenta como hallazgo.
+        ranks = {d["inputPipelineName"]: d["rank"] for d in sd.get("details", [])
+                 if "inputPipelineName" in d and isinstance(d.get("rank"), int)}
+        doc["found_by"], doc["ranks"] = sorted(ranks), ranks
+    else:
+        doc["found_by"], doc["ranks"] = ["vector" if mode == "vector" else "bm25"], {}
+    doc["mode"] = mode
+    return doc
+
+
+def _targets(query: str) -> list[tuple[str, str, callable]]:
+    """(coleccion, modelo, funcion que construye la etapa $vectorSearch). Es perezosa: el embedding
+    de la pregunta solo se pide si se va a usar (en modo bm25 no se llama a Voyage)."""
+    m = settings.get()["embedding"]
+    return [
+        (config.COLL_AUTO, m["auto_embed"],
+         lambda md: {"index": auto_index_name(md), "path": "text", "query": {"text": query}}),
+        (config.COLL_CONTEXT, m["voyage_context"],
+         lambda md: {"index": config.VECTOR_INDEX_CONTEXT, "path": "embedding",
+                     "queryVector": embeddings.embed_context([query], md, "query")[0]}),
+        (config.COLL_MULTIMODAL, m["voyage_multimodal"],
+         lambda md: {"index": config.VECTOR_INDEX_MULTIMODAL, "path": "embedding",
+                     "queryVector": embeddings.embed_multimodal([query], md, "query")}),
+    ]
+
+
+def _search_collection(name: str, model: str, vec_fn, query: str, user_id: str, top_k: int, mode: str) -> list[dict]:
+    pool = top_k * POOL
+    vec = None if mode == "bm25" else {**vec_fn(model), "numCandidates": pool * 20, "limit": pool,
+                                       "filter": _filter(user_id, model)}
+    lex = None if mode == "vector" else _lexical_stage(query, user_id, model)
+
+    def run(v):
+        pipe = _pipeline(v, lex, mode, pool) + _rerank_stage(query) + [{"$limit": top_k}, _project_stage(name)]
+        return list(db.coll(name).aggregate(pipe))
+
     try:
-        return _run(config.COLL_AUTO, stage, query)
+        docs = run(vec)
     except OperationFailure as exc:
-        if "query" not in str(exc).lower():
+        if name != config.COLL_AUTO or vec is None or "query" not in str(exc).lower():
             raise
-        # Versiones preview de autoEmbed usaban "query" como string.
-        return _run(config.COLL_AUTO, {**stage, "query": query}, query)
+        docs = run({**vec, "query": query})   # versiones preview de autoEmbed: "query" como string
+    return [_annotate(d, mode) for d in docs]
 
 
-def _search_context(query: str, user_id: str, top_k: int) -> list[dict]:
-    model = settings.get()["embedding"]["voyage_context"]
-    stage = {"index": config.VECTOR_INDEX_CONTEXT, "path": "embedding",
-             "queryVector": embeddings.embed_context([query], model, "query")[0],
-             "numCandidates": top_k * 20, "limit": top_k, "filter": _filter(user_id, model)}
-    return _run(config.COLL_CONTEXT, stage, query)
-
-
-def _search_multimodal(query: str, user_id: str, top_k: int) -> list[dict]:
-    model = settings.get()["embedding"]["voyage_multimodal"]
-    stage = {"index": config.VECTOR_INDEX_MULTIMODAL, "path": "embedding",
-             "queryVector": embeddings.embed_multimodal([query], model, "query"),
-             "numCandidates": top_k * 20, "limit": top_k, "filter": _filter(user_id, model)}
-    return _run(config.COLL_MULTIMODAL, stage, query)
-
-
-def search(query: str, user_id: str, top_k: int) -> list[dict]:
-    """Busca en las 3 colecciones (salta las vacias) y concatena: son espacios
-    vectoriales distintos, asi que no se ordenan entre si (simplificacion didactica)."""
-    results = []
-    for name, fn in ((config.COLL_AUTO, _search_auto), (config.COLL_CONTEXT, _search_context),
-                     (config.COLL_MULTIMODAL, _search_multimodal)):
+def search(query: str, user_id: str, top_k: int, mode: str | None = None) -> tuple[list[dict], list[str]]:
+    """Busca en las 3 colecciones (salta las vacias) y concatena: son espacios vectoriales distintos,
+    asi que no se ordenan entre si. Devuelve (resultados, avisos). Si $search/$rankFusion no estan
+    disponibles (indice sin crear, cluster antiguo...) se recurre a la busqueda vectorial y se avisa."""
+    mode = mode or settings.get()["retrieval"]["search_mode"]
+    results, warnings = [], []
+    for name, model, vec_fn in _targets(query):
         try:
             if db.coll(name).estimated_document_count() == 0:
                 continue
-            results += fn(query, user_id, top_k)
+            results += _search_collection(name, model, vec_fn, query, user_id, top_k, mode)
         except Exception as exc:
-            print(f"[aviso] busqueda en {name}: {exc}")
-    return results
+            print(f"[aviso] busqueda {mode} en {name}: {exc}")
+            if mode == "vector":
+                continue
+            warnings.append(f"{name}: {mode} no disponible, se uso solo la busqueda vectorial")
+            try:
+                results += _search_collection(name, model, vec_fn, query, user_id, top_k, "vector")
+            except Exception as exc2:
+                print(f"[aviso] busqueda vector en {name}: {exc2}")
+    return results, warnings
 
 
 def _repo_items(user_id: str) -> list[dict]:

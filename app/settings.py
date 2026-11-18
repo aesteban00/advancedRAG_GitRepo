@@ -20,7 +20,7 @@ DEFAULTS = {
     "llm": {"same_for_all": True,
             "graph": {"base_url": "", "model": ""},
             "chat": {"base_url": "", "model": ""}},
-    "retrieval": {"mode": "hybrid", "top_k": 4, "graph_depth": 2},
+    "retrieval": {"mode": "hybrid", "search_mode": "hybrid", "top_k": 4, "graph_depth": 2},
 }
 _keys = {"graph": "", "chat": ""}  # API keys SOLO en memoria
 
@@ -56,6 +56,8 @@ def _validate(cfg: dict) -> None:
             raise ValueError(f"Modelo no permitido para {s}: {emb.get(s)}")
     if ret["mode"] not in ("hybrid", "vector", "graph"):
         raise ValueError("retrieval.mode debe ser hybrid, vector o graph")
+    if ret["search_mode"] not in config.SEARCH_MODES:
+        raise ValueError("retrieval.search_mode debe ser hybrid, vector o bm25")
     if not 1 <= ret["top_k"] <= 20:
         raise ValueError("top_k debe estar entre 1 y 20")
     if not 1 <= ret["graph_depth"] <= 5:

@@ -218,11 +218,37 @@ function showTokens(tokens, steps) {
   box.innerHTML = html;
 }
 
+// Fragmentos recuperados y COMO se encontraron: por significado (vector), por palabras (BM25) o por ambos.
+function showChunks(chunks) {
+  const box = document.getElementById("chunks-box");
+  box.replaceChildren();
+  if (!chunks || !chunks.length) return;
+  const det = document.createElement("details"); det.open = true;
+  const sum = document.createElement("summary"); sum.textContent = `Fragmentos recuperados (${chunks.length})`; det.appendChild(sum);
+  for (const c of chunks) {
+    const row = document.createElement("div"); row.className = "chunk";
+    const head = document.createElement("div"); head.className = "chunk-head";
+    const name = document.createElement("span"); name.className = "chunk-src";
+    name.textContent = `${c.source}${c.page ? " · pág. " + c.page : ""}`; head.appendChild(name);
+    for (const m of c.found_by || []) {
+      const b = document.createElement("span"); b.className = "tag " + m;
+      b.textContent = (m === "bm25" ? "BM25" : "vector") + (c.ranks && c.ranks[m] ? " #" + c.ranks[m] : "");
+      head.appendChild(b);
+    }
+    const sc = document.createElement("span"); sc.className = "chunk-score"; sc.textContent = c.score; head.appendChild(sc);
+    row.appendChild(head);
+    const txt = document.createElement("div"); txt.className = "chunk-text"; txt.textContent = (c.text || "").replace(/\s+/g, " "); row.appendChild(txt);
+    det.appendChild(row);
+  }
+  box.appendChild(det);
+}
+
 function resetFlow() {
   document.getElementById("flow-steps").innerHTML = "";
   document.getElementById("flow-summary").innerHTML = "";
   document.getElementById("flow-empty").style.display = "none";
   document.getElementById("token-box").innerHTML = '<span class="status">Sin datos.</span>';
+  document.getElementById("chunks-box").replaceChildren();
 }
 
 // Crea o actualiza el paso con ese id (running -> done/error/skipped).
@@ -343,6 +369,7 @@ async function showFlow(flowId, bubble) {
     flow.steps.forEach(updateStep);
     showOrigin(flow.memory, flow.documents);
     showTokens(flow.tokens, flow.steps);
+    showChunks(flow.chunks);
     showChatGraph(flow.graph);
   } catch (err) {
     resetFlow();
@@ -358,6 +385,7 @@ function handleEvent(ev) {
     addMessage("assistant", ev.reply, ev.memory, ev.documents);
     showOrigin(ev.memory, ev.documents);
     showTokens(ev.tokens, Object.values(stepsSeen));
+    showChunks(ev.chunks);
     showChatGraph(ev.graph);
     if (ev.flow_id && userBubble) {
       attachFlow(userBubble, ev.flow_id);
@@ -435,7 +463,7 @@ function renderPipelineNote() {
   $("pipeline-note").innerHTML =
     `Ingesta: ${s}<br />Embedding: ${cfg.embedding[s]}<br />` +
     `LLM chat: ${cfg.llm.chat.model}<br />LLM grafo: ${same ? "(el mismo)" : cfg.llm.graph.model}<br />` +
-    `Recuperación: ${cfg.retrieval.mode}<br />$vectorSearch + $rerank + $graphLookup`;
+    `Recuperación: ${cfg.retrieval.mode}<br />Búsqueda: ${cfg.retrieval.search_mode}<br />$rankFusion + $rerank + $graphLookup`;
 }
 
 function applyLlmVisibility() {
@@ -445,8 +473,14 @@ function applyLlmVisibility() {
 }
 
 function fillConfigForm() {
+  // Los limites de los deslizadores van ANTES que el valor: un range sin max recorta cualquier valor a 100.
+  const [lo, hi] = cfg.options.chunk_size_range;
+  $("chunk-size").min = lo; $("chunk-size").max = hi;
+  $("chunk-overlap").min = 0; $("chunk-overlap").max = Math.floor(hi / 2);
   document.querySelector(`input[name=strategy][value=${cfg.ingest.strategy}]`).checked = true;
   document.querySelector(`input[name=mode][value=${cfg.retrieval.mode}]`).checked = true;
+  document.querySelector(`input[name=search_mode][value=${cfg.retrieval.search_mode}]`).checked = true;
+  updateSearchHelp();
   $("chunk-size").value = cfg.ingest.chunk_size;
   $("chunk-overlap").value = cfg.ingest.chunk_overlap;
   $("build-graph").checked = cfg.ingest.build_graph;
@@ -469,6 +503,13 @@ document.querySelectorAll("input[name=strategy]").forEach((r) => r.addEventListe
   if (radio("strategy") === "auto_embed") { $("chunk-size").value = cfg.ingest.chunk_size; $("chunk-overlap").value = cfg.ingest.chunk_overlap; }
   fillEmbeddingSelect(); updateChunkControls();
 }));
+const SEARCH_HELP = {
+  hybrid: "La base de datos fusiona los dos rankings con Reciprocal Rank Fusion: lo mejor de ambos mundos.",
+  vector: "Entiende sinónimos y paráfrasis, pero puede fallar con siglas, códigos o nombres propios.",
+  bm25: "Acierta con términos exactos (p. ej. «RDL 19/2022»), pero no entiende sinónimos. No llama a Voyage.",
+};
+function updateSearchHelp() { $("search-help").textContent = SEARCH_HELP[radio("search_mode")] || ""; }
+document.querySelectorAll("input[name=search_mode]").forEach((r) => r.addEventListener("change", updateSearchHelp));
 $("chunk-size").addEventListener("input", updateChunkControls);
 $("chunk-overlap").addEventListener("input", updateChunkControls);
 $("llm-same").addEventListener("change", applyLlmVisibility);
@@ -481,7 +522,7 @@ $("save-settings").addEventListener("click", async () => {
     llm: { same_for_all: $("llm-same").checked,
            chat: { base_url: $("chat-base-url").value.trim(), model: $("chat-model").value.trim() },
            graph: { base_url: $("graph-base-url").value.trim(), model: $("graph-model").value.trim() } },
-    retrieval: { mode: radio("mode"), top_k: Number($("top-k").value), graph_depth: Number($("graph-depth").value) },
+    retrieval: { mode: radio("mode"), search_mode: radio("search_mode"), top_k: Number($("top-k").value), graph_depth: Number($("graph-depth").value) },
     llm_keys: { chat: $("chat-api-key").value, graph: $("graph-api-key").value },
   };
   if (s === "auto_embed") { body.ingest.chunk_size = Number($("chunk-size").value); body.ingest.chunk_overlap = Number($("chunk-overlap").value); }

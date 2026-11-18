@@ -31,11 +31,23 @@ def auto_embed_definition(model: str) -> dict:
                        *FILTER_FIELDS]}
 
 
+def text_definition() -> dict:
+    """Indice BM25 (Atlas Search) sobre el texto del chunk.
+    Ventaja MongoDB: el MISMO documento tiene indice vectorial e indice de texto, sin copiar datos
+    a un buscador aparte. `text` se indexa con el analizador estandar (terminos exactos: nombres,
+    siglas, codigos) y con uno de espanol (`multi: es`: stemming y stopwords)."""
+    return {"mappings": {"dynamic": False, "fields": {
+        "text": {"type": "string", "analyzer": "lucene.standard",
+                 "multi": {"es": {"type": "string", "analyzer": "lucene.spanish"}}},
+        "metadata": {"type": "document", "fields": {
+            "visibility": {"type": "token"}, "owner": {"type": "token"}, "model": {"type": "token"}}}}}}
+
+
 def auto_index_name(model: str) -> str:
     return config.AUTO_INDEX_PREFIX + model
 
 
-def _create_if_missing(coll, name: str, definition: dict, editable: bool = True) -> None:
+def _create_if_missing(coll, name: str, definition: dict, editable: bool = True, index_type: str = "vectorSearch") -> None:
     """Idempotente. Los indices autoEmbed no se pueden editar (editable=False)."""
     existing = {i.get("name"): i for i in coll.list_search_indexes()}
     if name in existing:
@@ -48,7 +60,7 @@ def _create_if_missing(coll, name: str, definition: dict, editable: bool = True)
         else:
             print(f"[setup] indice '{name}' ya existe.")
         return
-    coll.create_search_index({"name": name, "type": "vectorSearch", "definition": definition})
+    coll.create_search_index({"name": name, "type": index_type, "definition": definition})
     print(f"[setup] indice '{name}' creado.")
 
 
@@ -77,6 +89,12 @@ def ensure_indexes() -> None:
             _create_if_missing(db.coll(coll_name), idx, vector_definition())
         except Exception as exc:
             print(f"[setup] AVISO {idx}: {exc}")
+    # Indices BM25 ($search) en las tres colecciones de chunks.
+    for coll_name in (config.COLL_AUTO, config.COLL_CONTEXT, config.COLL_MULTIMODAL):
+        try:
+            _create_if_missing(db.coll(coll_name), config.TEXT_INDEX, text_definition(), index_type="search")
+        except Exception as exc:
+            print(f"[setup] AVISO {config.TEXT_INDEX} en {coll_name}: {exc}")
     try:
         ensure_auto_index(settings.get()["embedding"]["auto_embed"])
     except Exception as exc:

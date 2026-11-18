@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>GraphRAG · MongoDB Atlas</title>
-  <link rel="stylesheet" href="/static/style.css?v=28" />
+  <link rel="stylesheet" href="/static/style.css?v=30" />
 </head>
 <body>
   <!-- Barra superior (estilo consola Atlas) -->
@@ -68,6 +68,7 @@
           <h2>Flujo de la petición</h2>
           <ol id="flow-steps" class="flow-steps"></ol>
           <div id="flow-summary" class="flow-summary"></div>
+          <div id="chunks-box" class="chunks-box"></div>
           <p id="flow-empty" class="status">Haz una pregunta para ver por dónde pasa.</p>
           <button type="button" id="flow-graph-link" class="btn" hidden></button>
           <h3>Tokens LLM del turno</h3>
@@ -148,9 +149,15 @@
 
           <section class="card">
             <h2>3. Recuperación</h2>
-            <label class="chk"><input type="radio" name="mode" value="hybrid" /> Híbrido: vectores + grafo</label>
-            <label class="chk"><input type="radio" name="mode" value="vector" /> Solo vectores ($vectorSearch + $rerank)</label>
+            <h4 class="sub">Qué fuentes de contexto se usan</h4>
+            <label class="chk"><input type="radio" name="mode" value="hybrid" /> Documentos + grafo</label>
+            <label class="chk"><input type="radio" name="mode" value="vector" /> Solo documentos (fragmentos)</label>
             <label class="chk"><input type="radio" name="mode" value="graph" /> Solo grafo ($graphLookup)</label>
+            <h4 class="sub">Cómo se buscan los fragmentos de los documentos</h4>
+            <label class="chk"><input type="radio" name="search_mode" value="hybrid" /> Híbrida: <code>$rankFusion</code> = <code>$vectorSearch</code> + <code>$search</code> (BM25)</label>
+            <label class="chk"><input type="radio" name="search_mode" value="vector" /> Solo vectorial: acierta por significado</label>
+            <label class="chk"><input type="radio" name="search_mode" value="bm25" /> Solo BM25: acierta por palabras exactas (siglas, códigos, nombres)</label>
+            <p class="status" id="search-help"></p>
             <label class="fld">Top K <input type="number" id="top-k" min="1" max="20" /></label>
             <label class="fld">Profundidad del grafo <input type="number" id="graph-depth" min="1" max="5" /></label>
             <button type="button" id="save-settings" class="btn primary">Guardar configuración</button>
@@ -184,7 +191,7 @@
     </main>
   </div>
 
-  <script src="/static/graph.js?v=28"></script>
-  <script src="/static/app.js?v=28"></script>
+  <script src="/static/graph.js?v=30"></script>
+  <script src="/static/app.js?v=30"></script>
 </body>
 </html>

@@ -21,6 +21,7 @@ Repos de GitHub ─► grafo (librerías, endpoints, código) ─┼─► Mongo
 | **Una sola plataforma**: chunks, vectores, grafo, memoria y ajustes en el mismo cluster | BD `graphrag_demo` |
 | **Grafo nativo**: un documento por entidad y recorrido con `$graphLookup` dentro de la BD, sin base de grafos aparte | `app/graph_store.py` |
 | **Automated Embedding (`autoEmbed`)**: Atlas genera y sincroniza los vectores; la app solo guarda texto | estrategia `auto_embed` |
+| **Búsqueda híbrida en una sola agregación**: `$rankFusion` fusiona `$vectorSearch` (significado) y `$search` BM25 (palabras exactas) y después `$rerank`, sobre el mismo documento y sin buscador aparte | `app/vector_search.py` |
 | **Voyage AI y `$rerank` integrados** | estrategias manuales y búsqueda |
 | **Esquema flexible**: repos, librerías, endpoints, funciones… en la misma colección | `knowledge_graph` |
 
@@ -34,9 +35,24 @@ Repos de GitHub ─► grafo (librerías, endpoints, código) ─┼─► Mongo
 Además: un modelo de **embedding**, un **LLM para construir el grafo** y otro **para el chat** (por defecto, el mismo), tres modos de recuperación (`hybrid`, `vector`, `graph`) y tres fuentes: ficheros, carpeta o URLs de GitHub.
 
 ## Qué verás en pantalla
-- **Chat**: la respuesta cita sus fuentes y el panel derecho muestra el flujo (memoria, `$vectorSearch`, grafo, LLM, tokens).
+- **Chat**: la respuesta cita sus fuentes y el panel derecho muestra el flujo (memoria, búsqueda híbrida, grafo, LLM, tokens) y, para cada fragmento recuperado, **cómo se encontró**: por significado (`vector #2`), por palabras exactas (`BM25 #1`) o por ambos.
 - **Grafo**: visor navegable (NetworkX calcula el layout; se dibuja en SVG). Zoom y arrastre; **filtros** por tipo de nodo y de relación (el código —ficheros, clases, funciones— va oculto por defecto); **clic** = ficha de la entidad (atributos, fuentes, relaciones salientes y entrantes clicables); **doble clic** = expandir o colapsar su vecindario sin perder lo que ya ves; búsqueda con autocompletado y **camino más corto entre dos entidades** (`$graphLookup`), sin distinguir si vienen de repos o de documentos.
 - **Configuración**: modelos, ingesta, recuperación, fuentes y estado de los índices de Atlas.
+
+## Búsqueda híbrida: vectorial + BM25
+La búsqueda vectorial entiende el significado («cuánto dura el código» ≈ «vigencia del código»), pero puede fallar con **siglas, códigos o nombres propios** («RDL 19/2022»). BM25 (`$search`) acierta con esos términos exactos, pero no entiende sinónimos. En modo **híbrido** MongoDB ejecuta las dos búsquedas y fusiona los rankings con *Reciprocal Rank Fusion* dentro de una única agregación:
+
+```javascript
+{ $rankFusion: { input: { pipelines: {
+    vector: [ { $vectorSearch: { ... } } ],
+    bm25:   [ { $search: { ... } }, { $limit: n } ] } },
+  combination: { weights: { vector: 1, bm25: 1 } }, scoreDetails: true } }
+// ... seguido de $rerank y $limit
+```
+- Se elige en **Configuración → Recuperación**: `hybrid` (por defecto), `vector` o `bm25` (este último no llama a Voyage).
+- Cada colección de chunks tiene dos índices: el vectorial y uno de texto `idx_text` (Atlas Search), con analizador estándar y de español. Se crean solos al arrancar.
+- Requiere un cluster con `$rankFusion` (MongoDB 8.1+). Si no está disponible, la app avisa y recurre a la búsqueda vectorial.
+- Los pesos de la fusión están en `RRF_WEIGHTS` (`app/config.py`).
 
 ## De un repo de GitHub se extrae (sin LLM)
 Descripción, librerías y versiones, bases de datos y servicios, endpoints, propietario (CODEOWNERS), clases/funciones Python con sus llamadas y relaciones entre repos. El README y `docs/*.md` pasan por la ingesta normal.

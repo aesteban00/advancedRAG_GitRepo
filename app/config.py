@@ -67,6 +67,7 @@ COLL_SETTINGS = "app_settings"
 
 VECTOR_INDEX_CONTEXT = "idx_vector_context"
 VECTOR_INDEX_MULTIMODAL = "idx_vector_multimodal"
+TEXT_INDEX = "idx_text"  # indice BM25 ($search); mismo nombre en cada coleccion de chunks
 AUTO_INDEX_PREFIX = "idx_auto_"        # + nombre del modelo, p.ej. idx_auto_voyage-4
 VECTOR_DIMENSIONS = 1024
 
@@ -101,6 +102,10 @@ GITHUB_RAW = "https://raw.githubusercontent.com"
 GITHUB_MAX_FILES = 150          # ficheros de codigo analizados por repo
 GITHUB_MAX_FILE_BYTES = 100_000
 GITHUB_MAX_DOCS = 10            # README/docs .md que pasan por el LLM (coste)
+
+# Busqueda de texto (BM25 con $search) combinada con la vectorial.
+SEARCH_MODES = ("hybrid", "vector", "bm25")  # hybrid = $rankFusion(vectorSearch + search)
+RRF_WEIGHTS = {"vector": 1.0, "bm25": 1.0}  # peso de cada pipeline en la fusion (Reciprocal Rank Fusion)
 
 # Re-ranking con $rerank (cluster 9.0+ y Native Reranking activado).
 RERANK_ENABLED = True

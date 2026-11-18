@@ -34,6 +34,7 @@ def save_flow(user_id: str, thread_id: str, question: str,
         "documents": result.get("documents", 0),
         "tokens": result.get("tokens", {}),
         "graph": result.get("graph"),
+        "chunks": result.get("chunks", []),
         "created_at": datetime.now(timezone.utc),
     }
     return str(_coll().insert_one(doc).inserted_id)

@@ -180,15 +180,24 @@ def answer_stream(question: str, thread_id: str, use_memory: bool = True,
         r = settings.get()["retrieval"]
         mode = r["mode"]
         rerank = " + $rerank" if config.RERANK_ENABLED else ""
-        label = "BBDD · $vectorSearch" + rerank
+        sm = r["search_mode"]
+        label = {"hybrid": "BBDD · $rankFusion($vectorSearch + $search BM25)",
+                 "vector": "BBDD · $vectorSearch", "bm25": "BBDD · $search (BM25)"}[sm] + rerank
         if mode in ("hybrid", "vector"):
             yield _step("db_search", label, "running")
             t0 = time.time()
             try:
-                docs_ctx = vector_search.search(question, user_id, r["top_k"])
+                docs_ctx, warns = vector_search.search(question, user_id, r["top_k"], sm)
                 files = sorted({d.get("metadata", {}).get("source", "?") for d in docs_ctx})
-                yield _step("db_search", label, "done",
-                            f"{len(docs_ctx)} fragmentos · " + (", ".join(files) if files else "sin resultados"), t0)
+                detail = f"{len(docs_ctx)} fragmentos · " + (", ".join(files) if files else "sin resultados")
+                if sm == "hybrid" and docs_ctx:
+                    both = sum(1 for d in docs_ctx if len(d["found_by"]) == 2)
+                    only_v = sum(1 for d in docs_ctx if d["found_by"] == ["vector"])
+                    only_b = sum(1 for d in docs_ctx if d["found_by"] == ["bm25"])
+                    detail += f" · ambos {both} · solo vectorial {only_v} · solo BM25 {only_b}"
+                if warns:
+                    detail += " · AVISO: " + "; ".join(warns)
+                yield _step("db_search", label, "done", detail, t0)
             except Exception as exc:
                 print(f"[aviso] No se pudo buscar en documentos: {exc}")
                 yield _step("db_search", label, "error", str(exc)[:120], t0)
@@ -248,6 +257,11 @@ def answer_stream(question: str, thread_id: str, use_memory: bool = True,
         "tokens": usage_total,
         "graph": graph_view.subgraph_layout(graph_entities, highlight=graph_start),
         "sources": sorted({d.get("metadata", {}).get("source", "?") for d in docs_ctx}),
+        # Fragmentos recuperados y como se encontraron (para la tabla del panel de flujo).
+        "chunks": [{"source": d.get("metadata", {}).get("source", "?"), "page": d.get("metadata", {}).get("page"),
+                    "score": round(float(d.get("score") or 0), 4), "found_by": d.get("found_by", []),
+                    "ranks": d.get("ranks", {}), "mode": d.get("mode", ""), "text": (d.get("text") or "")[:220]}
+                   for d in docs_ctx],
     }
 
 
