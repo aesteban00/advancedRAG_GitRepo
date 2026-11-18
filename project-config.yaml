@@ -1,0 +1,46 @@
+# ============================================================
+#  project-config.yaml  -  configuracion de la MEMORIA (Agent Engine Memory)
+#  La aplica scripts/setup_agent_engine.sh (agentengine memory configure/apply).
+#  No contiene claves: solo referencias a secrets de proyecto.
+#
+#  Los marcadores __X__ los rellena el script con tu .env:
+#    __MEMORY_LLM_BASE_URL__  __MEMORY_LLM_MODEL__  __MEMORY_LLM_AUTH_HEADER__
+#  (si aplicas este fichero a mano, sustituyelos por valores reales).
+# ============================================================
+memory:
+  log_level: info            # debug | info | warning | error | critical
+
+  # Embeddings de los recuerdos (Voyage AI; la clave es el secret VOYAGE_API_KEY).
+  # Alternativas: voyage-4 (equilibrado), voyage-4-lite (mas barato y rapido).
+  voyage:
+    model: "voyage-4-large"
+    dimension: 1024
+
+  # Embeber cada turno al escribirlo: se puede buscar al instante, pero anade latencia.
+  short_term:
+    embed_on_write: false
+
+  # LLM que extrae recuerdos en segundo plano (cualquier endpoint compatible con OpenAI).
+  # La clave es el secret LLM_API_KEY. Ejemplos de alternativas:
+  #   OpenAI:        base_url https://api.openai.com/v1      auth_header authorization
+  #   Azure/gateway: base_url <tu-gateway>/openai/v1         auth_header api-key
+  extraction_llm:
+    provider: openai
+    model: __MEMORY_LLM_MODEL__
+    base_url: __MEMORY_LLM_BASE_URL__
+    api_key_secret: LLM_API_KEY
+    auth_header: __MEMORY_LLM_AUTH_HEADER__
+
+  # Cuando se extrae: tras max_messages mensajes o stale_minutes de inactividad.
+  background_extraction:
+    snapshot:
+      max_messages: 20
+      stale_minutes: 1
+
+  # Tipos de memoria a extraer (quita los que no necesites para ahorrar coste).
+  extraction:
+    enabled:
+      - semantic      # hechos y preferencias
+      - episodic      # que paso en cada conversacion
+      - taxonomic     # categorias y relaciones
+      - procedural    # como hacer las cosas

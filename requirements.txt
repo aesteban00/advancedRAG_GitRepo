@@ -1,0 +1,18 @@
+fastapi
+uvicorn[standard]
+python-multipart
+python-dotenv
+pymongo
+pypdf
+pillow
+voyageai
+agent-engine-sdk-memory
+openai
+httpx
+# GraphRAG con MongoDB + LangChain (guia oficial MongoDB)
+langchain-mongodb>=0.12
+langchain-openai
+# Layout del grafo para el visor (panel derecho inferior)
+networkx
+# Tests
+pytest

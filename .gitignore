@@ -1,0 +1,31 @@
+# ============================================================
+#  .gitignore
+#  Archivos que NUNCA se suben al repositorio publico.
+#  El mas importante: .env (contiene las credenciales).
+# ============================================================
+
+# Credenciales / secretos
+.env
+
+PDFs/
+
+# Documentacion INTERNA de creacion (NO debe subirse a GitHub)
+# Aqui viven specs.md, diagramas mermaid, notas, etc. Solo en local.
+interna/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Entorno / IDE
+.DS_Store
+.idea/
+.vscode/
+
+# Otros
+*.log
+# Agente de memoria generado por scripts/setup_agent_engine.sh (contiene .env propio)
+agent-engine/
