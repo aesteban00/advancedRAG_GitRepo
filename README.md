@@ -87,19 +87,38 @@ Abre http://localhost:8090. Al arrancar se crean **en código** colecciones e í
 3. **Chat** → pregunta, p. ej. *"¿Qué librerías usa owner/repo?"*, *"¿Qué repos usan MongoDB?"*, *"¿Qué se ve afectado si cambia X?"*. Cambia el modo (`vector`, `graph`, `hybrid`) y compara el panel de flujo.
 4. **Grafo** → explora las relaciones con zoom.
 
+## Ramas, BBDD y memoria por rama
+Cada rama tiene su propia base de datos y su propio proyecto de memoria:
+
+| Rama | BBDD de la app | BBDD de la memoria | Context de Agent Engine |
+|---|---|---|---|
+| `main` | `graphrag_demo` | `graphrag_demo` | `graphrag` |
+| `mi-mejora` | `mi_mejora` | `mi_mejora_memory` | `mi_mejora` |
+
+Al cambiar de rama, un hook de git (`.githooks/post-checkout`) reescribe el bloque `branch-env` del `.env`. Los datos que no se deducen del nombre (organización y proyecto de memoria, credenciales) están en `envs/<rama>.env`, que no se sube a git.
+
+```bash
+scripts/new_branch.sh mi-mejora   # crea la rama desde main y su perfil envs/mi_mejora.env
+# 1) crea en Agent Engine un proyecto llamado mi_mejora (consola: la CLI no puede crearlo)
+# 2) copia su ID y las credenciales de un service account en envs/mi_mejora.env
+python3 scripts/branch_env.py mi-mejora
+./scripts/setup_agent_engine.sh    # crea el agente de memoria de la rama
+uvicorn app.main:app --reload --port 8090
+```
+Hasta completar el perfil, la app arranca con la memoria desactivada. El hook se activa una vez por clon con `git config core.hooksPath .githooks`.
+
 ## Variables del `.env`
 | Variable | Para qué sirve |
 |---|---|
 | `CHAT_LLM_API_KEY` / `CHAT_LLM_BASE_URL` / `CHAT_LLM_MODEL` | Modelo de chat por defecto (cualquier proveedor compatible con OpenAI). Editable en la pestaña Configuración |
 | `VOYAGE_API_KEY` | Embeddings de las estrategias manuales y de la memoria |
 | `MONGODB_URI` | Conexión a Atlas (la app y la memoria usan el mismo cluster) |
-| `MONGODB_DATABASE` | Base de datos de la app **y** de la memoria (el script la sube como secret). Por defecto `graphrag_demo`; cámbiala (p. ej. `graphrag_dev`) para probar una rama sin tocar los datos de `main`: colecciones e índices se crean solos al arrancar |
+| `MONGODB_DATABASE` / `MEMORY_MONGODB_DATABASE` | BBDD de la app y de la memoria. **Las fija el sistema según la rama** (ver *Ramas* abajo): `main` usa `graphrag_demo`; cada rama nueva usa `<rama>` y `<rama>_memory` |
 | `GITHUB_TOKEN` | (Opcional) sube el límite de GitHub de 60 a 5000 peticiones/h |
 | `AGENTIC_MEMORY_PROJECT_ID` | Proyecto de Agent Engine donde vive la memoria |
 | `AGENTIC_MEMORY_CLIENT_ID` / `AGENTIC_MEMORY_CLIENT_SECRET` | Service account que la app usa para hablar con la memoria |
 | `MEMORY_LLM_BASE_URL` / `MEMORY_LLM_MODEL` / `MEMORY_LLM_AUTH_HEADER` / `MEMORY_LLM_API_KEY` | Solo para el script: **LLM de extracción de la memoria**, independiente del modelo de chat. Debe ser alcanzable desde Agent Engine (ver arriba). La clave se sube como secret `LLM_API_KEY` |
 | `AGENTENGINE_ORG_ID` | Solo para el script, **obligatorio**: id de tu organización de Agent Engine. Con `AGENTIC_MEMORY_PROJECT_ID` fija dónde se despliega; el script aborta si el context existente apunta a otra org/proyecto |
-| `AGENTENGINE_CONTEXT` | Solo para el script: nombre del context de la CLI (por defecto `graphrag`) |
 
 ## Estructura
 ```
