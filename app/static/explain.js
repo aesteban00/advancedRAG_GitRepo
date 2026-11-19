@@ -42,6 +42,33 @@ function renderStatus(st) {
   }
 }
 
+// Iconos (SVG en linea, sin imagenes externas). Color por proveedor: local=gris, Atlas=verde, LLM=morado.
+const EX_ICON_PATHS = {
+  "local/python": '<path d="M8 7l-5 5 5 5M16 7l5 5-5 5M14 4l-4 16"/>',                         // </>
+  "atlas/insert": '<path d="M12 5v14M5 12h14"/><rect x="3" y="3" width="18" height="18" rx="4"/>',  // + en caja
+  "atlas/autoembedding": '<path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/><path d="M19 16l.8 2.2L22 19l-2.2.8L19 22l-.8-2.2L16 19l2.2-.8z"/>', // destello
+  "atlas/index": '<path d="M4 6h16M4 12h10M4 18h7"/><circle cx="18" cy="16" r="3"/>',             // lista + busqueda
+  "atlas/update": '<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M14 6l4 4"/>',                      // lapiz
+  "atlas/agent_memory": '<path d="M9 4a3 3 0 0 0-3 3v1a3 3 0 0 0-2 5 3 3 0 0 0 2 5 3 3 0 0 0 3 3V4z"/><path d="M15 4a3 3 0 0 1 3 3v1a3 3 0 0 1 2 5 3 3 0 0 1-2 5 3 3 0 0 1-3 3V4z"/>', // cerebro
+  "atlas/aggregate": '<path d="M12 3l9 5-9 5-9-5z"/><path d="M3 13l9 5 9-5"/><path d="M3 17.5l9 5 9-5"/>', // capas
+  "atlas/find": '<circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5"/>',                     // lupa
+  "LLM/update_grafo": '<circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="8" r="2.5"/><circle cx="12" cy="18" r="2.5"/><path d="M8 7.5l8 .5M7.5 8l3.5 8M16.5 10.5l-3 5.5"/>', // nodos
+  "LLM/chat": '<path d="M4 5h16v11H9l-5 4z"/>',                                                    // burbuja
+};
+const EX_ICON_COLOR = { "local/python": "#5b6b69", "atlas": "#00684A", "LLM": "#7c3aed" };
+function exIconBadge(key) {
+  const wrap = exEl("span", "icon-badge");
+  const prov = key.split("/")[0];
+  wrap.style.setProperty("--ic", EX_ICON_COLOR[key] || EX_ICON_COLOR[prov] || "#5b6b69");
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.setAttribute("viewBox", "0 0 24 24"); svg.setAttribute("class", "ic");
+  svg.setAttribute("fill", "none"); svg.setAttribute("stroke", "currentColor");
+  svg.setAttribute("stroke-width", "1.8"); svg.setAttribute("stroke-linecap", "round"); svg.setAttribute("stroke-linejoin", "round");
+  svg.innerHTML = EX_ICON_PATHS[key] || EX_ICON_PATHS["local/python"];
+  wrap.append(svg, exEl("span", "icon-label", key));
+  return wrap;
+}
+
 function renderLanes() {
   renderLane("boxes-ingest", exCatalog.ingest);
   renderLane("boxes-query", exCatalog.query);
@@ -53,7 +80,7 @@ function renderLane(id, steps) {
   for (const s of steps) {
     const card = exEl("button", "box" + (s.id === exSelected ? " active" : ""));
     card.type = "button";
-    card.append(exEl("span", `kind ${s.kind}`, s.kind), exEl("h3", "", s.title), exEl("p", "", s.summary));
+    card.append(exIconBadge(s.icon || "local/python"), exEl("h3", "", s.title), exEl("p", "", s.summary));
     if (s.collection) card.appendChild(exEl("code", "coll", s.collection));
     card.addEventListener("click", () => { exSelected = s.id; renderLanes(); showDetail(s); });
     lane.appendChild(card);
@@ -90,7 +117,7 @@ function showDetail(s) {
   const d = document.getElementById("explain-detail");
   d.replaceChildren();
   d.hidden = false;
-  d.appendChild(exEl("span", `kind ${s.kind}`, s.kind));
+  d.appendChild(exIconBadge(s.icon || "local/python"));
   d.appendChild(exEl("h2", "", s.title));
   d.appendChild(exEl("p", "", s.summary));
   if (s.files && s.files.length) {

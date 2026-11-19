@@ -573,3 +573,8 @@ body.autoembed-active .content { padding: 20px 24px; }
 .code-body .cl.am { color: #d8c4ff; background: rgba(139, 92, 246, .16); box-shadow: inset 3px 0 0 #a78bfa; font-weight: 600; }
 .code-body .cl.am .n { color: #c4b5fd; }
 .code-body .cl.mg.am { box-shadow: inset 3px 0 0 #7cf5c8, inset 6px 0 0 #a78bfa; }
+
+/* ---- Iconos de cada paso (Explicacion) ---- */
+.icon-badge { display: inline-flex; align-items: center; gap: 6px; align-self: flex-start; padding: 3px 9px 3px 5px; border-radius: 999px; background: color-mix(in srgb, var(--ic) 12%, #fff); color: var(--ic); border: 1px solid color-mix(in srgb, var(--ic) 35%, #fff); }
+.icon-badge .ic { width: 16px; height: 16px; flex-shrink: 0; }
+.icon-badge .icon-label { font: 600 0.68rem ui-monospace, Menlo, monospace; }

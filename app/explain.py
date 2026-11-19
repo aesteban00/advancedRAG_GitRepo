@@ -34,6 +34,28 @@ def _step(id, lane, title, summary, kind, collection=None, code=None, note="", r
             "db": config.MONGODB_DB, "collection": collection, "code": code, "note": note, "runnable": runnable}
 
 
+# Categoria de icono por paso (la muestra la pestaña Explicacion).
+ICON_CATEGORIES = ["local/python", "atlas/insert", "atlas/autoembedding", "atlas/index", "atlas/update",
+                   "atlas/agent_memory", "atlas/aggregate", "atlas/find", "LLM/update_grafo", "LLM/chat"]
+STEP_ICON = {
+    "ingest-load": "local/python",
+    "ingest-store": "atlas/insert",
+    "ingest-index": "atlas/index",
+    "ingest-graph-llm": "LLM/update_grafo",
+    "ingest-github": "atlas/update",
+    "query-memory": "atlas/agent_memory",
+    "query-search": "atlas/aggregate",
+    "query-graph-entities": "atlas/find",
+    "query-graph-traverse": "atlas/aggregate",
+    "query-graph-incoming": "atlas/find",
+    "query-answer": "LLM/chat",
+    "query-record": "atlas/insert",
+}
+# Si un paso no esta en STEP_ICON: por el tipo de llamada (kind).
+KIND_ICON = {"local": "local/python", "insert": "atlas/insert", "atlas": "atlas/autoembedding",
+             "createSearchIndex": "atlas/index", "update": "atlas/update", "agent": "atlas/agent_memory",
+             "aggregate": "atlas/aggregate", "find": "atlas/find", "llm": "LLM/chat"}
+
 # Script(s) donde se implementa cada paso (los que se muestran en el panel de detalle).
 STEP_FILES = {
     "ingest-load": ["app/loaders.py"],
@@ -219,4 +241,5 @@ def catalog(user_id: str, question: str) -> dict:
 
     for step in ingest + query:
         step["files"] = STEP_FILES.get(step["id"], [])
+        step["icon"] = STEP_ICON.get(step["id"]) or KIND_ICON.get(step["kind"], "local/python")
     return {"status": _status(user_id), "question": question, "ingest": ingest, "query": query}
