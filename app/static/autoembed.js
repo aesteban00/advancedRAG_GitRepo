@@ -38,3 +38,12 @@ function loadAutoembed() {
   }
   aeApplyZoom();
 }
+
+// Reparto del alto: un panel plegado ocupa solo su titulo; el desplegado toma el resto.
+function aeLayout() {
+  document.querySelectorAll("#view-autoembed .ae-fold").forEach((d) => {
+    d.parentElement.classList.toggle("is-closed", !d.open);
+  });
+}
+document.querySelectorAll("#view-autoembed .ae-fold").forEach((d) => d.addEventListener("toggle", aeLayout));
+aeLayout();

@@ -563,3 +563,7 @@ body.autoembed-active .content { padding: 20px 24px; }
 .ae-toolbar { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; flex-shrink: 0; }
 .ae-label { font-size: 0.78rem; color: var(--muted); margin-right: 4px; }
 .ae-pct { min-width: 52px; text-align: center; font-size: 0.85rem; font-weight: 600; }
+
+/* Panel plegado: solo su titulo; el desplegado ocupa el espacio libre */
+.ae-panel.is-closed { flex: 0 0 auto; }
+.ae-panel:not(.is-closed) { flex: 1 1 0; }
