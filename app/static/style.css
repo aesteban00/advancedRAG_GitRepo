@@ -516,3 +516,7 @@ body.side-dragging, body.side-dragging * { user-select: none; cursor: col-resize
 .gv-hint[hidden], .graph-detail[hidden] { display: none; }
 .bulk { padding: 2px 8px; font-size: 0.7rem; }
 .bulk:disabled { opacity: .4; cursor: not-allowed; }
+
+/* Ficha del nodo: el identificador salta de linea y el distintivo de tipo no se parte */
+.graph-detail h3 { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; overflow-wrap: anywhere; line-height: 1.3; }
+.graph-detail .badge { white-space: nowrap; flex-shrink: 0; margin-left: 0; }
