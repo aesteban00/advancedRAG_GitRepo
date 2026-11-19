@@ -162,11 +162,11 @@ function renderLegends() {
 }
 
 // ---- Panel de detalle ----
-function closeDetail() { $g("gv-detail").hidden = true; }
-async function toggleExpand(id) { try { S.expanded.has(id) ? collapseNode(id) : await expandNode(id); if (S.selected === id) showDetail(id); } catch (err) { info("Error: " + err.message); } }
+function closeDetail() { $g("gv-detail").hidden = true; $g("gv-hint").hidden = false; }
+async function toggleExpand(id) { try { S.expanded.has(id) ? collapseNode(id) : await expandNode(id); if (S.selected === id) graphShowDetail(id); } catch (err) { info("Error: " + err.message); } }
 async function selectNode(id) {
   S.selected = id; render();
-  await showDetail(id);
+  await graphShowDetail(id);
 }
 // Navega a un nodo relacionado: lo trae al grafo si falta, muestra su tipo si estaba filtrado,
 // expande su vecindario (para poder seguir navegando) y centra la vista en el.
@@ -180,11 +180,11 @@ async function goTo(id) {
   S.selected = id; render();
   const m = S.nodes.get(id);
   if (m) { view.x = 500 - m.px * view.k; view.y = 350 - m.py * view.k; applyView(); }   // centrar
-  await showDetail(id);
+  await graphShowDetail(id);
 }
-async function showDetail(id) {
+async function graphShowDetail(id) {
   const box = $g("gv-detail");
-  box.hidden = false; box.replaceChildren();
+  box.hidden = false; box.replaceChildren(); $g("gv-hint").hidden = true;
   let d;
   try { d = await fetchJson("/graph/entity?id=" + encodeURIComponent(id)); }
   catch (err) { box.textContent = "Error: " + err.message; return; }
