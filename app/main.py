@@ -26,6 +26,7 @@ import chat
 import config
 import flow_store
 import hmac
+import os
 import time
 from datetime import datetime, timezone
 
@@ -133,6 +134,18 @@ def explain_catalog(user_id: str = "demo-user", question: str = ""):
         return explain.catalog(user_id, question)
     except Exception as exc:
         raise _http_error(exc)
+
+
+@app.get("/diagrams/{name}")
+def diagram(name: str):
+    """Esquema de arquitectura (JSON de Excalidraw). Solo los nombres de config.DIAGRAMS."""
+    if name not in config.DIAGRAMS:
+        raise HTTPException(404, "Esquema no disponible.")
+    path = os.path.join(config.DIAGRAMS_DIR, name)
+    if not os.path.exists(path):
+        raise HTTPException(404, f"Falta el fichero {name} en interna/esquemas/.")
+    with open(path, encoding="utf-8") as f:
+        return json.load(f)
 
 
 @app.get("/explain/source")

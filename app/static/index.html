@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Motor Cognitivo (KB) · MongoDB Atlas</title>
-  <link rel="stylesheet" href="/static/style.css?v=49" />
+  <link rel="stylesheet" href="/static/style.css?v=51" />
 </head>
 <body>
   <!-- Barra superior (estilo consola Atlas) -->
@@ -17,6 +17,7 @@
       <button type="button" data-view="chat" class="active">Chat</button>
       <button type="button" data-view="graph">Grafo</button>
       <button type="button" data-view="explain">Explicación</button>
+      <button type="button" data-view="autoembed">¿Por qué Autoembedding?</button>
       <button type="button" data-view="config">Configuración</button>
     </nav>
   </header>
@@ -186,6 +187,20 @@
         </div>
       </section>
 
+      <!-- ============ Vista ¿POR QUE AUTOEMBEDDING? (dos esquemas, cada uno con su barra horizontal) ============ -->
+      <section id="view-autoembed" class="view" hidden>
+        <div class="ae-wrap">
+          <section class="ae-panel">
+            <h2>Con Automated Embedding (autoEmbed de Atlas)</h2>
+            <div class="ae-scroll" id="ae-con"></div>
+          </section>
+          <section class="ae-panel">
+            <h2>Sin Automated Embedding (pipeline propio)</h2>
+            <div class="ae-scroll" id="ae-sin"></div>
+          </section>
+        </div>
+      </section>
+
       <!-- ============ Vista CONFIGURACION ============ -->
       <section id="view-config" class="view" hidden>
         <h1>Configuración</h1>
@@ -287,8 +302,9 @@
     </main>
   </div>
 
-  <script src="/static/graph.js?v=49"></script>
-  <script src="/static/explain.js?v=49"></script>
-  <script src="/static/app.js?v=49"></script>
+  <script src="/static/graph.js?v=51"></script>
+  <script src="/static/explain.js?v=51"></script>
+  <script src="/static/autoembed.js?v=51"></script>
+  <script src="/static/app.js?v=51"></script>
 </body>
 </html>

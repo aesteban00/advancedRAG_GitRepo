@@ -108,6 +108,10 @@ GRAPH_RELATIONSHIP_TYPES = [
 LLM_TIMEOUT_S = 120
 LLM_MAX_RETRIES = 2
 
+# Esquemas de arquitectura (Excalidraw) para la pestaña "¿Por qué Autoembedding?". Viven en interna/ (no se publica).
+DIAGRAMS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "interna", "esquemas")
+DIAGRAMS = ("arch_CON_autoembedding.excalidraw", "arch_SIN_autoembedding.excalidraw")
+
 GITHUB_API = "https://api.github.com"
 GITHUB_RAW = "https://raw.githubusercontent.com"
 GITHUB_MAX_FILES = 150          # ficheros de codigo analizados por repo

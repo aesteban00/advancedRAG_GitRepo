@@ -541,3 +541,11 @@ body.explain-active .sidebar { position: static; height: 100%; }
   .sidebar { height: auto; }
   .flow { position: static; height: auto; }
 }
+
+/* ---- ¿Por qué Autoembedding?: dos paneles, cada uno con su barra horizontal ---- */
+#view-autoembed { height: 100%; min-height: 0; flex-direction: column; }
+.ae-wrap { display: flex; flex-direction: column; gap: 16px; width: 100%; height: 100%; min-height: 0; }
+.ae-panel { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; background: #fff; border: 1px solid var(--border); border-radius: 16px; padding: 12px 14px; }
+.ae-panel h2 { margin: 0 0 8px; font-size: 0.95rem; flex-shrink: 0; }
+.ae-scroll { flex: 1; min-height: 0; overflow-x: auto; overflow-y: auto; border: 1px solid var(--border); border-radius: 10px; background: #fcfdfc; }
+.ae-svg { display: block; }

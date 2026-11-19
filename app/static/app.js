@@ -581,6 +581,8 @@ function showView(name) {
   document.getElementById("view-config").hidden = name !== "config";
   document.getElementById("view-graph").hidden = name !== "graph";
   document.getElementById("view-explain").hidden = name !== "explain";
+  document.getElementById("view-autoembed").hidden = name !== "autoembed";
+  if (name === "autoembed") loadAutoembed();
   document.body.classList.toggle("explain-active", name === "explain");
   if (name === "explain") loadExplain();
   document.querySelectorAll(".main-tabs button").forEach((b) => b.classList.toggle("active", b.dataset.view === name));
