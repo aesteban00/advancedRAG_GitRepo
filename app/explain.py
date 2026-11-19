@@ -60,6 +60,12 @@ MONGO_RE = re.compile(
     r"\.limit\(|\.sort\(")
 
 
+# Lineas que llaman a Agent Engine Memory: SDK, sesiones, contexto, turnos, service account y la memoria de la app.
+AM_RE = re.compile(
+    r"agent_engine_sdk_memory|\bMemory\(|MemoryRequestContext|\.bind\(|build_context|record_turn|get_memory_context|"
+    r"is_configured\(|TOKEN_URL|agentengine\.mongodb\.com|AGENTIC_MEMORY_|oauth/token|\bmemory\.")
+
+
 def source_view(path: str) -> dict:
     """Codigo de un script de app/ con cada linea marcada si llama a MongoDB. Solo ficheros de app/*.py."""
     root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
@@ -69,9 +75,13 @@ def source_view(path: str) -> dict:
     with open(os.path.join(root, path), encoding="utf-8") as f:
         lines = f.read().splitlines()
     # Los comentarios se muestran en gris aunque mencionen operadores (p. ej. "$vectorSearch" en una nota).
-    out = [{"n": i, "text": t, "mongo": bool(MONGO_RE.search(t)) and not t.lstrip().startswith("#")}
-           for i, t in enumerate(lines, 1)]
-    return {"path": path, "mongo_lines": sum(1 for x in out if x["mongo"]), "lines": out}
+    out = []
+    for i, t in enumerate(lines, 1):
+        code = not t.lstrip().startswith("#")
+        out.append({"n": i, "text": t, "mongo": bool(MONGO_RE.search(t)) and code,
+                    "memory": bool(AM_RE.search(t)) and code})
+    return {"path": path, "mongo_lines": sum(1 for x in out if x["mongo"]),
+            "memory_lines": sum(1 for x in out if x["memory"]), "lines": out}
 
 
 def _status(user_id: str) -> dict:

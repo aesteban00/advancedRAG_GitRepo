@@ -70,13 +70,13 @@ async function openCode(path) {
   document.getElementById("code-close").focus();
   try {
     const src = await apiJson("/explain/source?path=" + encodeURIComponent(path));
-    title.textContent = `${src.path} · ${src.mongo_lines} líneas de MongoDB`;
+    title.textContent = `${src.path} · ${src.mongo_lines} líneas de MongoDB · ${src.memory_lines} de Agent Engine Memory`;
     let first = null;
     for (const l of src.lines) {
-      const row = exEl("div", "cl" + (l.mongo ? " mg" : ""));
+      const row = exEl("div", "cl" + (l.mongo ? " mg" : "") + (l.memory ? " am" : ""));
       row.append(exEl("span", "n", String(l.n)), exEl("span", "t", l.text || " "));
       box.appendChild(row);
-      if (l.mongo && !first) first = row;
+      if ((l.mongo || l.memory) && !first) first = row;
     }
     if (first && first.scrollIntoView) first.scrollIntoView({ block: "center" });
   } catch (err) { box.textContent = "Error: " + err.message; }

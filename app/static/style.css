@@ -567,3 +567,9 @@ body.autoembed-active .content { padding: 20px 24px; }
 /* Panel plegado: solo su titulo; el desplegado ocupa el espacio libre */
 .ae-panel.is-closed { flex: 0 0 auto; }
 .ae-panel:not(.is-closed) { flex: 1 1 0; }
+
+/* Lineas de Agent Engine Memory (lila) */
+.lg-memory { color: #8b5cf6; font-weight: 600; }
+.code-body .cl.am { color: #d8c4ff; background: rgba(139, 92, 246, .16); box-shadow: inset 3px 0 0 #a78bfa; font-weight: 600; }
+.code-body .cl.am .n { color: #c4b5fd; }
+.code-body .cl.mg.am { box-shadow: inset 3px 0 0 #7cf5c8, inset 6px 0 0 #a78bfa; }
