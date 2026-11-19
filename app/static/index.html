@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Motor Cognitivo (KB) · MongoDB Atlas</title>
-  <link rel="stylesheet" href="/static/style.css?v=52" />
+  <link rel="stylesheet" href="/static/style.css?v=54" />
 </head>
 <body>
   <!-- Barra superior (estilo consola Atlas) -->
@@ -187,7 +187,7 @@
         </div>
       </section>
 
-      <!-- ============ Vista ¿POR QUE AUTOEMBEDDING? (dos esquemas, cada uno con su barra horizontal) ============ -->
+      <!-- ============ Vista ¿POR QUE AUTOEMBEDDING? (dos imágenes; cada panel se pliega por separado) ============ -->
       <section id="view-autoembed" class="view" hidden>
         <div class="ae-toolbar">
           <span class="ae-label">Zoom</span>
@@ -198,12 +198,16 @@
         </div>
         <div class="ae-wrap">
           <section class="ae-panel">
-            <h2>Con Automated Embedding (autoEmbed de Atlas)</h2>
-            <div class="ae-scroll" id="ae-con"></div>
+            <details class="ae-fold" open>
+              <summary><span>Con Automated Embedding (autoEmbed de Atlas)</span></summary>
+              <div class="ae-scroll" id="ae-con"></div>
+            </details>
           </section>
           <section class="ae-panel">
-            <h2>Sin Automated Embedding (pipeline propio)</h2>
-            <div class="ae-scroll" id="ae-sin"></div>
+            <details class="ae-fold" open>
+              <summary><span>Sin Automated Embedding (pipeline propio)</span></summary>
+              <div class="ae-scroll" id="ae-sin"></div>
+            </details>
           </section>
         </div>
       </section>
@@ -309,9 +313,9 @@
     </main>
   </div>
 
-  <script src="/static/graph.js?v=52"></script>
-  <script src="/static/explain.js?v=52"></script>
-  <script src="/static/autoembed.js?v=52"></script>
-  <script src="/static/app.js?v=52"></script>
+  <script src="/static/graph.js?v=54"></script>
+  <script src="/static/explain.js?v=54"></script>
+  <script src="/static/autoembed.js?v=54"></script>
+  <script src="/static/app.js?v=54"></script>
 </body>
 </html>

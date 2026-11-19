@@ -138,14 +138,14 @@ def explain_catalog(user_id: str = "demo-user", question: str = ""):
 
 @app.get("/diagrams/{name}")
 def diagram(name: str):
-    """Esquema de arquitectura (JSON de Excalidraw). Solo los nombres de config.DIAGRAMS."""
+    """Imagen de un esquema de arquitectura (PNG o JPEG). Solo los nombres de config.DIAGRAMS."""
     if name not in config.DIAGRAMS:
         raise HTTPException(404, "Esquema no disponible.")
     path = os.path.join(config.DIAGRAMS_DIR, name)
     if not os.path.exists(path):
         raise HTTPException(404, f"Falta el fichero {name} en interna/esquemas/.")
-    with open(path, encoding="utf-8") as f:
-        return json.load(f)
+    media = "image/png" if name.endswith(".png") else "image/jpeg"
+    return FileResponse(path, media_type=media)
 
 
 @app.get("/explain/source")

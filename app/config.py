@@ -110,7 +110,7 @@ LLM_MAX_RETRIES = 2
 
 # Esquemas de arquitectura (Excalidraw) para la pestaña "¿Por qué Autoembedding?". Viven en interna/ (no se publica).
 DIAGRAMS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "interna", "esquemas")
-DIAGRAMS = ("arch_CON_autoembedding.excalidraw", "arch_SIN_autoembedding.excalidraw")
+DIAGRAMS = ("arch_CON_autoembedding.png", "arch_SIN_autoembedding.jpeg")
 
 GITHUB_API = "https://api.github.com"
 GITHUB_RAW = "https://raw.githubusercontent.com"
