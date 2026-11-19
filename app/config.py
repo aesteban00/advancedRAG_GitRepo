@@ -91,6 +91,9 @@ FIXED_CHUNK_OVERLAP = 200
 CHUNK_SIZE_RANGE = (200, 4000)      # limites de los sliders
 # Para el grafo se usan trozos mas grandes: 1 llamada al LLM por trozo (coste).
 GRAPH_CHUNK_SIZE = 4000
+# Profundidad minima del recorrido en las consultas de chat: 3 saltos cubren
+# repo -> documento -> servicio (p. ej. un componente documentado en un informe).
+GRAPH_MIN_DEPTH = 3
 
 GRAPH_ENTITY_TYPES = [
     "Repository", "Library", "Database", "Service", "Endpoint", "Team",

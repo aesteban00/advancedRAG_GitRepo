@@ -185,14 +185,36 @@ def _expand(start: list[str], depth: int) -> list[dict]:
     return list(merged.values())[:60]
 
 
+STOP = {"para", "como", "cual", "cuales", "que", "quien", "donde", "cuando", "usada", "usado", "usan", "utiliza",
+        "esta", "este", "estos", "estas", "tiene", "tienen", "sobre", "entre", "desde", "hasta", "hay", "del", "las", "los"}
+
+
+def _keywords(question: str) -> list[str]:
+    """Palabras significativas de la pregunta (sin acentos, >= 4 letras, sin palabras vacias)."""
+    import unicodedata
+    norm = unicodedata.normalize("NFKD", question.lower()).encode("ascii", "ignore").decode()
+    words = [w for w in re.findall(r"[a-z0-9_]+", norm) if len(w) >= 4 and w not in STOP]
+    return list(dict.fromkeys(words))
+
+
+def _keyword_hits(words: list[str], limit: int = 20) -> list[str]:
+    """Entidades cuyo _id contiene alguna palabra de la pregunta (cubre lo que el LLM de entidades no detecta)."""
+    coll, ids = db.coll(config.COLL_GRAPH), []
+    for w in words:
+        ids += [d["_id"] for d in coll.find({"_id": {"$regex": re.escape(w), "$options": "i"}}, {"_id": 1}).limit(5)]
+    return list(dict.fromkeys(ids))[:limit]
+
+
 def retrieve(question: str, depth: int) -> dict:
+    """Punto de partida: entidades que nombra el LLM + entidades cuyo nombre contiene palabras de la pregunta.
+    Recorrido: al menos GRAPH_MIN_DEPTH saltos (o la profundidad configurada si es mayor)."""
     try:
         names = get_store().extract_entity_names(question)
     except Exception as exc:
         print(f"[grafo] AVISO extrayendo entidades de la pregunta: {exc}")
         names = []
-    start = _resolve([n for n in names if isinstance(n, str)])
-    return {"start": start, "entities": _expand(start, depth)}
+    start = list(dict.fromkeys(_resolve([n for n in names if isinstance(n, str)]) + _keyword_hits(_keywords(question))))
+    return {"start": start, "entities": _expand(start, max(depth, config.GRAPH_MIN_DEPTH))}
 
 
 CODE_TYPES = ["File", "Class", "Function"]  # ruido de codigo: se ocultan en el resumen

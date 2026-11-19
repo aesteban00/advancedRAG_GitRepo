@@ -11,6 +11,8 @@
 
 from __future__ import annotations
 
+import re
+
 # Marcadores de ORIGEN: la primera linea de cada respuesta es uno de ellos.
 TAG_INTERNAL = "[Conocimiento interno]"
 TAG_PARTIAL = "[Conocimiento interno · parcial]"
@@ -18,6 +20,19 @@ TAG_NONE = "[Sin información interna]"
 TAG_EXTERNAL = "[Fuente externa · conocimiento general del modelo]"
 TAG_MEMORY = "[Memoria de conversaciones anteriores]"
 TAGS = (TAG_INTERNAL, TAG_PARTIAL, TAG_NONE, TAG_EXTERNAL, TAG_MEMORY)
+
+# Frases con las que el modelo dice que NO sabe: una respuesta asi no es una respuesta (la memoria no la acepta).
+HEDGE_RE = re.compile(
+    r"no (lo |la )?recuerdo|no (lo |la )?s[eé]\b|no tengo (informaci|datos|constancia)|no (encuentro|consta|hay|aparece)|"
+    r"no (puedo|pude) (confirmar|determinar|identificar)|no (hemos|hayamos) (identificado|hablado|mencionado)|"
+    r"no (est[aá]|aparece) (en|explicitamente|expl[ií]citamente)|no se (menciona|especifica|indica)",
+    re.IGNORECASE)
+
+
+def is_hedged(text: str) -> bool:
+    """La respuesta admite que no sabe: no vale como respuesta de memoria."""
+    return bool(HEDGE_RE.search(text or ""))
+
 
 # Pregunta exacta para ofrecer la busqueda externa. El codigo la detecta para
 # recordar la oferta y entender el "si" del siguiente turno.
@@ -36,6 +51,8 @@ Responder con precisión, de forma clara y concisa, usando EXCLUSIVAMENTE el CON
 2. Cada afirmación lleva su cita inmediatamente después: [fuente · pág. N] para documentos o [grafo: id] para entidades. Sin cita, no lo afirmes.
 3. Prohibido completar con conocimiento propio, suposiciones o datos de memoria general. No inventes nombres, cifras, versiones, endpoints ni relaciones.
 4. Si el contexto es contradictorio, dilo y muestra las dos versiones con sus citas.
+5. Si la pregunta trata de una herramienta, librería, servicio o componente, el grafo puede contener la respuesta a varios saltos: sigue las relaciones (USES_SERVICE, USES_DATABASE, DEPENDS_ON, DOCUMENTS, CONTAINS...) desde la entidad de partida hasta la que responde, y cita cada salto. Un salto sin cita no vale.
+6. No describas lo que no encontraste ni expliques tus intentos: si no hay respuesta, dilo en una sola frase, sin relleno.
 
 # Cuando falta información
 - Con {TAG_PARTIAL}: responde lo que sí está respaldado y añade una sección «No encontrado en la base de conocimiento:» con lo que falta (una línea por punto).
@@ -62,10 +79,12 @@ EXTERNAL_PROMPT = f"""Eres el Motor Cognitivo de una Knowledge Base corporativa.
 """
 
 
-MEMORY_PROMPT = f"""Responde usando UNICAMENTE los recuerdos de conversaciones anteriores que se indican abajo.
-- Si contienen la respuesta, la PRIMERA LINEA es exactamente: {TAG_MEMORY}
-  y despues la respuesta, clara y concisa (1-3 frases). Aclara que procede de lo hablado antes, no de los documentos.
-- Si NO la contienen o no estas seguro, responde exactamente: {{need_docs}}
+MEMORY_PROMPT = f"""Decide si los recuerdos de conversaciones anteriores (abajo) CONTIENEN de forma explicita la respuesta a la pregunta.
+- Si la contienen de forma explicita, la PRIMERA LINEA es exactamente: {TAG_MEMORY}
+  y despues la respuesta, clara y concisa (1-3 frases).
+- Si NO la contienen de forma explicita, si el recuerdo dice que no se sabe o no se recuerda, o si hay que deducirla,
+  responde exactamente y solo: {{need_docs}}
+No expliques por que no lo sabes: en ese caso basta con {{need_docs}}.
 """
 
 

@@ -90,8 +90,8 @@ def _answer_from_memory(question: str, memory_ctx: str) -> tuple[str | None, dic
         ],
     )
     text = (response.choices[0].message.content or "").strip()
-    if NEED_DOCS in text or not text:
-        return None, _usage(response)
+    if NEED_DOCS in text or not text or prompts.is_hedged(text):
+        return None, _usage(response)   # la memoria no basta: seguimos a documentos y grafo
     if prompts.origin_of(text) != "memory":   # la etiqueta de origen es obligatoria
         text = f"{prompts.TAG_MEMORY}\n{text}"
     return text, _usage(response)
