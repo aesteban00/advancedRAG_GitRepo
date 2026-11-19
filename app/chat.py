@@ -154,6 +154,26 @@ def answer_stream(question: str, thread_id: str, use_memory: bool = True,
       documents -> cuantos fragmentos de la BBDD (Atlas) se usaron
     La UI usa estos eventos para el panel "Flujo de la peticion".
     """
+    # Paso 0a: ¿ya respondimos esta pregunta a este usuario? Se reutiliza la respuesta anterior (sin esperar a
+    # que Agent Engine extraiga los recuerdos ni a repetir la busqueda). Se desactiva con la memoria OFF.
+    if use_memory and not prompts.is_confirmation(question):
+        try:
+            hit = flow_store.similar_past_answer(user_id, question)
+        except Exception as exc:
+            print(f"[aviso] atajo de respuestas anteriores: {exc}")
+            hit = None
+        if hit:
+            yield _step("memory_read", "Memoria · respuesta anterior", "done",
+                        f"misma pregunta ya respondida (similitud {hit['sim']}): «{hit['question'][:70]}»")
+            body = prompts.strip_tag(hit["reply"])
+            text = f"{prompts.TAG_MEMORY}\n{body}"
+            yield _step("memory_write", "Memoria · guardar turno", "skipped", "respuesta reutilizada")
+            yield {"type": "result", "reply": text, "origin": "memory",
+                   "memory": {"stm": 0, "episodic": 1, "semantic": 0}, "documents": 0,
+                   "tokens": {"prompt": 0, "completion": 0, "total": 0},
+                   "graph": {"nodes": [], "edges": []}, "sources": [], "chunks": []}
+            return
+
     # Paso 0: ¿el usuario esta aceptando salir de la base de conocimiento?
     # La pregunta anterior termino con prompts.OFFER_EXTERNAL y ahora responde "si".
     prev = None

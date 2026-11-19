@@ -80,6 +80,32 @@ def list_threads(user_id: str, limit: int = 30) -> list[dict]:
     ]
 
 
+def similar_past_answer(user_id: str, question: str, min_sim: float = 0.6, scan: int = 300) -> dict | None:
+    """Respuesta anterior del MISMO usuario a una pregunta parecida (Jaccard sobre palabras clave).
+    Es el atajo de memoria: no depende de la extraccion asincrona de Agent Engine (que tarda hasta
+    ~1 minuto en convertir turnos en recuerdos). Solo se reutilizan respuestas con origen (no las 'sin informacion')."""
+    import graph_store
+    from prompts import origin_of
+    target = set(graph_store._keywords(question))
+    if not target:
+        return None
+    best, best_sim = None, 0.0
+    for d in _coll().find({"user_id": user_id, "reply": {"$exists": True, "$ne": ""}},
+                          {"question": 1, "reply": 1, "created_at": 1}).sort("created_at", -1).limit(scan):
+        if origin_of(d.get("reply", "")) in ("none", ""):
+            continue
+        words = set(graph_store._keywords(d.get("question", "")))
+        if not words:
+            continue
+        sim = len(target & words) / len(target | words)
+        if sim > best_sim:
+            best, best_sim = d, sim
+    if best is None or best_sim < min_sim:
+        return None
+    return {"question": best["question"], "reply": best["reply"], "sim": round(best_sim, 2),
+            "when": best["created_at"].isoformat() if best.get("created_at") else ""}
+
+
 def last_turn(user_id: str, thread_id: str) -> dict | None:
     """Ultima pregunta/respuesta del hilo (para saber si se ofrecio buscar fuera)."""
     return _coll().find_one({"user_id": user_id, "thread_id": thread_id},

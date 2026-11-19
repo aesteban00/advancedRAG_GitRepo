@@ -130,6 +130,20 @@ def is_confirmation(message: str) -> bool:
     return words[0] in _YES and all(w in _YES or w in _FILLER for w in words)
 
 
+LEADING_TAG_RE = re.compile(
+    r"^\s*\[(Conocimiento interno|Interno · parcial|Sin información interna|Fuente externa|Memoria de conversaciones)[^\]]*\]\s*")
+
+
+def strip_tag(reply: str) -> str:
+    """Quita las etiquetas de origen del principio (incluidas las de versiones anteriores del prompt)."""
+    text = reply or ""
+    while True:
+        new = LEADING_TAG_RE.sub("", text, count=1)
+        if new == text:
+            return text
+        text = new
+
+
 def origin_of(reply: str) -> str:
     """'internal' | 'partial' | 'none' | 'external' | '' segun la etiqueta de la primera linea."""
     first = (reply or "").lstrip().split("\n", 1)[0]
