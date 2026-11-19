@@ -242,6 +242,10 @@ const ORIGINS = {
   external: ["Fuente externa", "o-external"],
   memory: ["Memoria de conversaciones", "o-memory"],
 };
+// Quita la primera linea si es una etiqueta de origen entre corchetes, p. ej. "[Conocimiento interno]".
+// Las citas [fuente · pág. N] del cuerpo no se tocan.
+const ORIGIN_TAG_RE = /^\s*\[(Conocimiento interno|Interno · parcial|Sin información interna|Fuente externa[^\]]*|Memoria de conversaciones[^\]]*)\]\s*/;
+function stripOriginTag(text) { return (text || "").replace(ORIGIN_TAG_RE, ""); }
 function addMessage(role, text, memory = null, documents = null, origin = "") {
   // Devuelve el div creado (para poder asociarle su flujo).
   const box = document.getElementById("chat-box");
@@ -286,7 +290,8 @@ function addMessage(role, text, memory = null, documents = null, origin = "") {
     div.prepend(o);
   }
   const body = document.createElement("div");
-  body.textContent = text;
+  // La etiqueta de origen ya aparece como icono: se quita la linea de texto repetida (solo la primera linea).
+  body.textContent = ORIGINS[origin] ? stripOriginTag(text) : text;
   div.appendChild(body);
   box.appendChild(div);
   box.scrollTop = box.scrollHeight; // auto-scroll hacia abajo
