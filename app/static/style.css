@@ -520,3 +520,24 @@ body.side-dragging, body.side-dragging * { user-select: none; cursor: col-resize
 /* Ficha del nodo: el identificador salta de linea y el distintivo de tipo no se parte */
 .graph-detail h3 { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; overflow-wrap: anywhere; line-height: 1.3; }
 .graph-detail .badge { white-space: nowrap; flex-shrink: 0; margin-left: 0; }
+
+/* ==== Layout de altura fija: cabecera siempre visible; cada panel hace su propio scroll ==== */
+html, body { height: 100%; overflow: hidden; }
+body { display: flex; flex-direction: column; }
+.topbar { flex-shrink: 0; height: 48px; position: relative; z-index: 40; }
+.layout { flex: 1; min-height: 0; height: auto; display: flex; overflow: hidden; }
+.sidebar { height: 100%; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+.content { flex: 1; min-width: 0; min-height: 0; height: 100%; overflow-y: auto; overscroll-behavior: contain; align-items: flex-start; }
+.view { min-height: 0; }
+.flow { position: sticky; top: 0; height: calc(100vh - 48px - 56px); }
+/* Explicacion: el contenido ocupa el alto disponible y sus paneles internos hacen el scroll */
+body.explain-active .layout { height: auto; overflow: hidden; }
+body.explain-active .content { overflow: hidden; }
+body.explain-active .sidebar { position: static; height: 100%; }
+@media (max-width: 1100px) {
+  html, body { overflow: auto; height: auto; }
+  .layout { overflow: visible; }
+  .content { overflow: visible; height: auto; }
+  .sidebar { height: auto; }
+  .flow { position: static; height: auto; }
+}
