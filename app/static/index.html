@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Motor Cognitivo (KB) · MongoDB Atlas</title>
-  <link rel="stylesheet" href="/static/style.css?v=51" />
+  <link rel="stylesheet" href="/static/style.css?v=52" />
 </head>
 <body>
   <!-- Barra superior (estilo consola Atlas) -->
@@ -189,6 +189,13 @@
 
       <!-- ============ Vista ¿POR QUE AUTOEMBEDDING? (dos esquemas, cada uno con su barra horizontal) ============ -->
       <section id="view-autoembed" class="view" hidden>
+        <div class="ae-toolbar">
+          <span class="ae-label">Zoom</span>
+          <button type="button" id="ae-out" class="btn" title="Alejar">−</button>
+          <span id="ae-pct" class="ae-pct">50%</span>
+          <button type="button" id="ae-in" class="btn" title="Acercar">+</button>
+          <button type="button" id="ae-reset" class="btn" title="Volver al 100 %">100%</button>
+        </div>
         <div class="ae-wrap">
           <section class="ae-panel">
             <h2>Con Automated Embedding (autoEmbed de Atlas)</h2>
@@ -302,9 +309,9 @@
     </main>
   </div>
 
-  <script src="/static/graph.js?v=51"></script>
-  <script src="/static/explain.js?v=51"></script>
-  <script src="/static/autoembed.js?v=51"></script>
-  <script src="/static/app.js?v=51"></script>
+  <script src="/static/graph.js?v=52"></script>
+  <script src="/static/explain.js?v=52"></script>
+  <script src="/static/autoembed.js?v=52"></script>
+  <script src="/static/app.js?v=52"></script>
 </body>
 </html>
