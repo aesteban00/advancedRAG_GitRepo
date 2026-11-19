@@ -509,10 +509,10 @@ body.side-dragging, body.side-dragging * { user-select: none; cursor: col-resize
 .status-card .fold-body .status-head { margin-bottom: 8px; }
 .status-card .fold-body .status-head .btn { margin-left: auto; }
 
-/* ---- Pestaña Grafo: la ficha del nodo vive en el panel izquierdo fijo ---- */
-body.graph-active .sidebar { position: sticky; top: 0; height: calc(100vh - 48px); overflow-y: auto; flex-shrink: 0; width: 340px; padding: 16px 18px; }
-body.graph-active .sidebar > *:not(#gv-detail):not(#gv-hint) { display: none; }
-body.graph-active .sidebar .gv-hint:not([hidden]) { display: block; }
-.gv-hint[hidden] { display: none; }
-body.graph-active .sidebar .graph-detail { display: block; width: auto; height: auto; overflow: visible; border: 0; background: transparent; padding: 0; font-size: 0.82rem; }
-.graph-detail[hidden] { display: none; }
+/* ---- Pestaña Grafo: ficha del nodo en la columna derecha ---- */
+.graph-side { width: 330px; flex-shrink: 0; display: flex; flex-direction: column; gap: 8px; }
+.graph-side .gv-hint:not([hidden]) { display: block; border: 1px dashed var(--border); border-radius: 12px; padding: 12px; }
+.graph-side .graph-detail { width: auto; height: 68vh; overflow: auto; }
+.gv-hint[hidden], .graph-detail[hidden] { display: none; }
+.bulk { padding: 2px 8px; font-size: 0.7rem; }
+.bulk:disabled { opacity: .4; cursor: not-allowed; }

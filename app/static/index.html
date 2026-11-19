@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Motor Cognitivo (KB) · MongoDB Atlas</title>
-  <link rel="stylesheet" href="/static/style.css?v=44" />
+  <link rel="stylesheet" href="/static/style.css?v=45" />
 </head>
 <body>
   <!-- Barra superior (estilo consola Atlas) -->
@@ -24,9 +24,6 @@
   <div class="layout">
     <!-- Menu lateral -->
     <nav class="sidebar">
-      <!-- Detalle del grafo: en el panel izquierdo mientras la pestaña Grafo esta activa -->
-      <aside id="gv-detail" class="graph-detail" hidden></aside>
-      <p id="gv-hint" class="status gv-hint">Pulsa un nodo del grafo para ver aquí su ficha: atributos, fuentes y relaciones.</p>
       <!-- Detalle de la pestaña Explicación: ocupa el panel izquierdo fijo mientras esa pestaña está activa -->
       <aside class="explain-detail" id="explain-detail">
             <p class="status">Pulsa un paso para ver la llamada real a MongoDB que hace la aplicación, lista para copiar en MongoDB Compass.</p>
@@ -132,6 +129,10 @@
           <p class="status">Rueda = zoom · arrastrar el fondo = mover · clic = detalle · doble clic = expandir/colapsar · casillas = filtrar por tipo o relación.</p>
           <div class="graph-body">
             <svg id="gv-svg" viewBox="0 0 1000 700" preserveAspectRatio="xMidYMid meet"></svg>
+            <aside id="gv-side" class="graph-side">
+              <aside id="gv-detail" class="graph-detail" hidden></aside>
+              <p id="gv-hint" class="status gv-hint">Pulsa un nodo del grafo para ver aquí su ficha: atributos, fuentes y relaciones.</p>
+            </aside>
           </div>
           <div class="legend-row"><b>Tipos:</b> <span id="gv-legend" class="graph-legend"></span></div>
           <div class="legend-row"><b>Relaciones:</b> <span id="gv-rel-legend" class="graph-legend"></span></div>
@@ -285,8 +286,8 @@
     </main>
   </div>
 
-  <script src="/static/graph.js?v=44"></script>
-  <script src="/static/explain.js?v=44"></script>
-  <script src="/static/app.js?v=44"></script>
+  <script src="/static/graph.js?v=45"></script>
+  <script src="/static/explain.js?v=45"></script>
+  <script src="/static/app.js?v=45"></script>
 </body>
 </html>

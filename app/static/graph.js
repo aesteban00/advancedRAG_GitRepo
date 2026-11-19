@@ -156,8 +156,22 @@ function renderLegends() {
     l.append(label); box.appendChild(l);
   };
   const types = [...new Set([...S.nodes.values()].map((n) => n.type))].sort();
-  for (const t of types) mk(tl, t || "?", !S.hiddenTypes.has(t), (on) => on ? S.hiddenTypes.delete(t) : S.hiddenTypes.add(t), color(t));
   const rels = [...new Set([...S.edges.values()].map((e) => e.type))].sort();
+  // Todos / Ninguno: marca o desmarca de golpe todos los filtros de la fila.
+  const bulk = (box, values, hidden) => {
+    for (const [label, show] of [["Todos", true], ["Ninguno", false]]) {
+      const b = document.createElement("button");
+      b.type = "button"; b.className = "btn bulk"; b.textContent = label; b.disabled = !!S.path;
+      b.addEventListener("click", () => {
+        for (const v of values) { show ? hidden.delete(v) : hidden.add(v); }
+        render();
+      });
+      box.appendChild(b);
+    }
+  };
+  bulk(tl, types, S.hiddenTypes);
+  for (const t of types) mk(tl, t || "?", !S.hiddenTypes.has(t), (on) => on ? S.hiddenTypes.delete(t) : S.hiddenTypes.add(t), color(t));
+  bulk(rl, rels, S.hiddenRels);
   for (const t of rels) mk(rl, t || "?", !S.hiddenRels.has(t), (on) => on ? S.hiddenRels.delete(t) : S.hiddenRels.add(t));
 }
 
