@@ -272,6 +272,13 @@ function attachSearch(input) {
 
 // ---- Controles ----
 $g("gv-overview").addEventListener("click", loadOverviewGraph);
+// Reset: limpia la busqueda, los campos de camino y la ficha, y vuelve al resumen.
+$g("gv-reset-search").addEventListener("click", () => {
+  for (const id of ["gv-entity", "gv-from", "gv-to"]) $g(id).value = "";
+  S.selected = null;
+  closeDetail();
+  loadOverviewGraph();
+});
 $g("gv-last").addEventListener("click", () => setGraph(lastGraph));
 $g("gv-entity").addEventListener("keydown", (e) => { if (e.key === "Enter" && e.target.value.trim()) loadEntityGraph(e.target.value.trim()); });
 $g("gv-path").addEventListener("click", showPath);
